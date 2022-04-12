@@ -81,6 +81,11 @@ public:
 			throw std:exception();
 		return ret==0;
 	}
+
+	pthread_mutex_t* get()
+	{
+		return &mtx;
+	}
 }
 
 class cond
