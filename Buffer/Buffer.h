@@ -2,6 +2,7 @@
 #define BUFFER_H_INCLUDED
 #include <vector>
 #include <assert.h>
+#include<string>
 class Buffer
 {
 private:
@@ -44,6 +45,14 @@ public:
         assert(prepenableBytes==8);
         assert(readableBytes==0);
         assert(writableBytes==initialSize);
+    }
+
+    void init()
+    {
+        m_buffer(kCheapPrepend+initialSize);
+        readeridx(kCheapPrepend);
+        writeidx(kCheapPrepend);
+        read_only_idx(kCheapPrepend);
     }
 
     bool readFD(int sockfd);//将内核读缓冲区的数据读到应用层读缓冲区中，返回false表示读取错误出错或者对方关闭连接
