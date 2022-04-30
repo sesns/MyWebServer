@@ -56,6 +56,8 @@ public:
     }
 
     bool readFD(int sockfd);//将内核读缓冲区的数据读到应用层读缓冲区中，返回false表示读取错误出错或者对方关闭连接
+    int writeFD(int sockfd,struct iovec* iov,int iovcnt);
+    //将数据从用户写缓冲区、文件映射地址 写到内核写缓冲区中，返回-1关闭连接，返回0数据因内核缓冲区满没有写完，返回1数据全部发送完毕
 
     string retrieveAsString(size_t len);//从缓冲区读取长为len的数据
 

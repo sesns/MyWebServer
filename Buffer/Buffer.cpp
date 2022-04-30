@@ -113,3 +113,58 @@ bool Buffer::readFD(int sockfd)
 
     return true;
 }
+
+//将数据从用户写缓冲区、文件映射地址 写到内核写缓冲区中，返回-1关闭连接，返回0数据因内核缓冲区满没有写完，返回1数据全部发送完毕
+//ET模式
+int Buffer::writeFD(int sockfd,struct iovec* iov,int iovcnt)
+{
+    iov[0].iov_base=getReadBegin();
+    iov[0].iov_len=readableBytes();
+    int ret;
+    size_t bytes_have_send=0;
+    size_t bytes_to_send;
+    size_t len1=iov[0].iov_len;
+    size_t len2;
+    char* start1=iov[0].iov_base;
+    char* start2=iov[1].iov_base;
+    if(iovcnt==1)
+        bytes_to_send=len1;
+    else
+    {
+        len2=iov[1].iov_len;
+        bytes_to_send=len1+len2;
+    }
+
+    while(true)
+    {
+        ret=writev(sockfd,iov,iovcnt);
+        if(ret>0)
+            bytes_have_send+=ret;
+        else if(ret<0)
+        {
+            if(errno==EAGAIN || errno==EWOULDBLOCK)
+                return 0;
+            return -1;
+        }
+
+        if(bytes_have_send<bytes_to_send)//数据没发完
+        {
+            if(bytes_have_send<len1)//第一块的数据没有发完
+            {
+                iov[0].iov_base=start1+bytes_have_send;
+                iov[0].iov_len=len1-bytes_have_send;
+            }
+            else//第一块的数据已经发完
+            {
+                iov[0].iov_len=0;
+                iov[1].iov_base=start2+bytes_have_send-len1;
+                iov[1].iov_len=len2-(bytes_have_send-len1);
+            }
+        }
+        else//所有数据已发送完
+        {
+            retrieve(bytes_have_send);
+            return 1;
+        }
+    }
+}

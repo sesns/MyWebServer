@@ -253,7 +253,7 @@ Http::HTTP_CODE Http::process_read()
     return NO_REQUEST;
 }
 
-bool Http::read()//将数据从内核读缓冲区读取到用户的读缓冲区,返回false说明对方关闭连接或读取出错
+bool Http::Read()//将数据从内核读缓冲区读取到用户的读缓冲区,返回false说明对方关闭连接或读取出错
 {
     return m_readbuffer.readFD(m_socket);
 }
@@ -348,4 +348,34 @@ bool Http::process_write(HTTP_CODE ret)//生成响应报文，将其写入用户
 
     m_iov_cnt=1;
     return true;
+}
+
+bool Http::Write()//将数据从用户写缓冲区、文件映射地址 写到内核写缓冲区中，返回false说明要关闭连接
+{
+    int ret=m_writebuffer.writeFD(m_socket,m_iov,m_iov_cnt);
+    if(ret==-1)//出错，应关闭连接
+    {
+        unmap();
+        return false;
+    }
+    else if(ret==0)//数据因内核缓冲区满而没有完整写完
+    {
+        mod_fd_in_epoll(m_socket,EPOLLOUT);//重置EPOLLONESHOT可写事件
+        return true;
+    }
+    else if(ret==1)//数据完整写到内核缓冲区中
+    {
+        unmap();
+        mod_fd_in_epoll(m_socket,EPOLLIN);//重置EPOLLONESHOT可读事件
+
+        if(m_linger)
+        {
+            init();
+            return true;
+        }
+        else
+            return false;
+    }
+
+    return false;
 }

@@ -2,6 +2,7 @@
 #define HTTP_H_INCLUDED
 #include "Buffer.h"
 #include<sys/stat.h>
+#include<sys/epoll.h>
 
 const string m_doc_root="/home/moocos/CodeBlockWebServer/WebServer";//WebServer根目录
 //定义http响应的一些状态信息
@@ -77,21 +78,40 @@ private:
     void add_headers(size_t len);//生成响应首部，将其写入用户写缓冲区中
     void add_content(const string text);//添加内容
     bool process_write(HTTP_CODE ret);//生成响应报文，将其写入用户写缓冲区中
-
+    void set_noblocking(int fd)//将文件描述符设置为非阻塞
+    {
+        int old_option=fcntl(fd,F_GETFL);//获取文件状态标志
+        int new_option=old_option | O_NONBLOCK;//设置为非阻塞
+        fcntl(fd,F_SETFL,new_option);//设置文件状态标志
+    }
+    void unmap()
+    {
+        if (m_file_addres)
+        {
+            munmap(m_file_addres, m_file_stat.st_size);
+            m_file_addres = 0;
+        }
+    }
 public:
-    Http(int sockfd)
+    static int m_epoll_fd;
+public:
+    Http(int sockfd,int epoll_fd)
     {
         m_socket=sockfd;
-        m_iov_cnt=2;
+        m_iov_cnt=1;
         m_iov=(struct iovec*)malloc(m_iov_cnt*sizeof(struct iovec));
         init();
+        m_readbuffer.init();
+        m_writebuffer.init();
     }
-
+    ~Http()
+    {
+        if(m_iov)
+            free(m_iov);
+    }
     void init()
     {
         m_check_status=CHECK_REQUESTLINE;
-        m_readbuffer.init();
-        m_writebuffer.init();
         m_content_length=0;
         m_string="";
         m_method="GET";
@@ -101,6 +121,31 @@ public:
         m_host="";
         m_file_type="text/html";
     }
+
+    void add_fd_to_epoll(int fd)//将fd添加到epoll空间，ET模式，EPOLLIN | EPOLLONESHOT
+    {
+        epoll_event event;
+        event.data.fd=fd;
+        event.events= EPOLLET | EPOLLIN | EPOLLONESHOT | EPOLLRDHUP;
+        epoll_ctl(m_epoll_fd,EPOLL_CTL_ADD,fd,&event);
+        set_noblocking(fd);
+    }
+
+    void remove_fd_from_epoll(int fd)//从epoll空间中删除fd
+    {
+        epoll_ctl(m_epoll_fd,EPOLL_CTL_DEL,fd,0);
+    }
+
+    void mod_fd_in_epoll(int fd,int old_events)//重置EPOLLONESHOT
+    {
+        epoll_event event;
+        event.data.fd=fd;
+        event.events= old_events | EPOLLET | EPOLLONESHOT | EPOLLRDHUP;
+        epoll_ctl(m_epoll_fd,EPOLL_CTL_mod,fd,&event);
+    }
+
+    bool Read();//将数据从内核读缓冲区读取到用户的读缓冲区,返回false说明对方关闭连接或读取出错
+    bool Write();//将数据从用户写缓冲区、文件映射地址 写到内核写缓冲区中，返回false说明要关闭连接
 
 };
 #endif // HTTP_H_INCLUDED
