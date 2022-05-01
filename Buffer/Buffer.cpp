@@ -26,7 +26,7 @@ string Buffer::retrieveAsString(size_t len)//从缓冲区读取长为len的数�
     string res(getReadBegin(),len);
 
     //调整缓冲区
-    retrieve(size_t len);
+    retrieve(len);
 
     return res;
 }
@@ -39,7 +39,7 @@ string Buffer::retriveOneLine()//从缓冲区读取一行
         idx++;
     }
     size_t len=idx-readeridx;
-    if(m_buffer[idx]=='\0')
+    if(idx< writeidx && m_buffer[idx]=='\0')
         len+=2;
     return retrieveAsString(len);
 }
@@ -63,7 +63,7 @@ void Buffer::make_space(size_t len)
 
 
 }
-void Buffer::append(char* data,size_t len)//将数据加到m_buffer里面
+void Buffer::append(const char* data,size_t len)//将数据加到m_buffer里面
 {
     make_space(len);//使得有足够的空间容纳数据
     std::copy(data,data+len,getWriteBegin());//复制数据
@@ -72,7 +72,7 @@ void Buffer::append(char* data,size_t len)//将数据加到m_buffer里面
 
 bool Buffer::readFD(int sockfd)
 {
-    char[65536] external_buffer;//用于暂存超出应用层缓冲区大小的数据
+    char external_buffer[65536];//用于暂存超出应用层缓冲区大小的数据
     struct iovec vec[2];
     size_t writable_bytes;
     int iovcnt;
@@ -87,7 +87,7 @@ bool Buffer::readFD(int sockfd)
         vec[1].iov_len=sizeof(external_buffer);
 
         //如果此时应用层缓冲区已经很大了（大于128k,一开始才1k），就不往stackbuffer写入数据了
-        iovcnt=writable_bytes>=sizeof(external_buffer)?1:2
+        iovcnt=writable_bytes>=sizeof(external_buffer)?1:2;
 
         int bytes_recv=readv(sockfd,vec,iovcnt);
 
@@ -118,28 +118,30 @@ bool Buffer::readFD(int sockfd)
 //ET模式
 int Buffer::writeFD(int sockfd,struct iovec* iov,int iovcnt)
 {
-    iov[0].iov_base=getReadBegin();
-    iov[0].iov_len=readableBytes();
-    int ret;
-    size_t bytes_have_send=0;
-    size_t bytes_to_send;
-    size_t len1=iov[0].iov_len;
-    size_t len2;
-    char* start1=iov[0].iov_base;
-    char* start2=iov[1].iov_base;
-    if(iovcnt==1)
-        bytes_to_send=len1;
-    else
+    writev_cnt+=1;
+
+    if(writev_cnt==1)
     {
+        iov[0].iov_base=getReadBegin();
+        iov[0].iov_len=readableBytes();
+        m_bytes_have_send=0;
+        len1=iov[0].iov_len;
         len2=iov[1].iov_len;
-        bytes_to_send=len1+len2;
+        start1=(char*)iov[0].iov_base;
+        start2=(char*)iov[1].iov_base;
+
+        if(iovcnt==1)
+            m_bytes_to_send=len1;
+        else
+            m_bytes_to_send=len1+len2;
     }
 
+    int ret;
     while(true)
     {
         ret=writev(sockfd,iov,iovcnt);
         if(ret>0)
-            bytes_have_send+=ret;
+            m_bytes_have_send+=ret;
         else if(ret<0)
         {
             if(errno==EAGAIN || errno==EWOULDBLOCK)
@@ -147,23 +149,24 @@ int Buffer::writeFD(int sockfd,struct iovec* iov,int iovcnt)
             return -1;
         }
 
-        if(bytes_have_send<bytes_to_send)//数据没发完
+        if(m_bytes_have_send<m_bytes_to_send)//数据没发完
         {
-            if(bytes_have_send<len1)//第一块的数据没有发完
+            if(m_bytes_have_send<len1)//第一块的数据没有发完
             {
-                iov[0].iov_base=start1+bytes_have_send;
-                iov[0].iov_len=len1-bytes_have_send;
+                iov[0].iov_base=start1+m_bytes_have_send;
+                iov[0].iov_len=len1-m_bytes_have_send;
             }
             else//第一块的数据已经发完
             {
                 iov[0].iov_len=0;
-                iov[1].iov_base=start2+bytes_have_send-len1;
-                iov[1].iov_len=len2-(bytes_have_send-len1);
+                iov[1].iov_base=start2+m_bytes_have_send-len1;
+                iov[1].iov_len=m_bytes_to_send-m_bytes_have_send;
             }
         }
         else//所有数据已发送完
         {
-            retrieve(bytes_have_send);
+            writev_cnt=0;
+            retrieve(m_bytes_have_send);
             return 1;
         }
     }

@@ -9,9 +9,13 @@
 #include<sys/mman.h>
 #include<unistd.h>
 using namespace std;
+
+int Http::m_user_count=0;
+int Http::m_epoll_fd=-1;
+
 Http::LINE_STATUS Http::parse_line()//从状态机解析缓冲区中的一行
 {
-    char cur='';
+    char cur=' ';
     bool flag;
     cur=m_readbuffer.read_only(&flag);//flag为true时说明读取成功
     while(flag)
@@ -30,7 +34,7 @@ Http::LINE_STATUS Http::parse_line()//从状态机解析缓冲区中的一行
                 size_t idx1=m_readbuffer.get_read_only_idx()-1;
                 size_t idx2=m_readbuffer.get_read_only_idx()-2;
                 m_readbuffer.set_char(idx1,'\0');
-                m_readbuffer.set_char(idx1,'\0');
+                m_readbuffer.set_char(idx2,'\0');
                 return LINE_OK;
             }
             else
@@ -48,7 +52,7 @@ Http::LINE_STATUS Http::parse_line()//从状态机解析缓冲区中的一行
                 size_t idx1=m_readbuffer.get_read_only_idx()-1;
                 size_t idx2=m_readbuffer.get_read_only_idx()-2;
                 m_readbuffer.set_char(idx1,'\0');
-                m_readbuffer.set_char(idx1,'\0');
+                m_readbuffer.set_char(idx2,'\0');
                 return LINE_OK;
             }
             else
@@ -58,7 +62,7 @@ Http::LINE_STATUS Http::parse_line()//从状态机解析缓冲区中的一行
         cur=m_readbuffer.read_only(&flag);
     }
 
-    return LINE_OPEN；
+    return LINE_OPEN;
 }
 
 Http::HTTP_CODE Http::parse_request_line(const string& text)//解析请求行
@@ -110,7 +114,7 @@ Http::HTTP_CODE Http::parse_header(const string& text)//解析请求首部
     //判断是空行还是请求首部
     //如果text=='\r\n'并且报文为GET方法，直接返回GET_REQUEST
     //如果text=='\r\n'并且报文为POST方法,状态转移到CHECK_CONTENT
-    if(text=="\0\0")
+    if(text=="\0")
     {
         if(m_method=="GET")
             return GET_REQUEST;
@@ -119,25 +123,33 @@ Http::HTTP_CODE Http::parse_header(const string& text)//解析请求首部
             m_check_status=CHECK_CONTENT;
             return NO_REQUEST;
         }
+        else
+            return BAD_REQUEST;
     }
     else if(text.find("Connection:")!=-1)//Connection字段
     {
         if(text.find("keep-alive")!=-1)
             m_linger=true;
-        else
+        else if(text.find("close")!=-1)
             m_linger=false;
+        else
+            return BAD_REQUEST;
     }
     else if(text.find("Content-length:")!=-1)//Content-length字段
     {
-        m_content_length=atol(text.substr(16,text.size()-16-2));
+        string len=text.substr(15,text.size()-15);
+        for(int i=0;i<len.size();i++)
+            if(!isdigit(len[i]))
+                return BAD_REQUEST;
+        m_content_length=stoi(len);
     }
     else if(text.find("Host:")!=-1)//Host字段
     {
-        m_host=text.substr(6,text.size()-6-2);
+        m_host=text.substr(5,text.size()-5);
     }
     else
     {
-        std:cout<<"unknown header!\n";
+        std::cout<<"unknown header!\n";
     }
 
     return NO_REQUEST;
@@ -183,7 +195,7 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
     }
 
     //检查是否存在这样的文件
-    if(stat(m_read_file.c_str(),m_file_stat)<0)
+    if(stat(m_real_file.c_str(),&m_file_stat)<0)
         return NO_RESOURCE;
 
     //检查是否有权限请求该文件
@@ -221,7 +233,7 @@ Http::HTTP_CODE Http::process_read()
 
         text=m_readbuffer.retriveOneLine();
 
-        switch(m_check_status):
+        switch(m_check_status)
         {
             case CHECK_REQUESTLINE:
                 ret=parse_request_line(text);//解析请求行成功则从CHECK_REQUESTLINE转移到CHECK_HEADER，否则返回错误类型
@@ -258,14 +270,14 @@ bool Http::Read()//将数据从内核读缓冲区读取到用户的读缓冲区,
     return m_readbuffer.readFD(m_socket);
 }
 
-void Http::add_response(const string text)//将text写入到用户写缓冲区中
+void Http::add_response(string text)//将text写入到用户写缓冲区中
 {
     m_writebuffer.append(text.c_str(),text.size());
 }
 
-void Http::add_status_line(const string status_code,const string reason)//生成状态行，将其写入用户写缓冲区中
+void Http::add_status_line(string status_code,string reason)//生成状态行，将其写入用户写缓冲区中
 {
-    add_response("HTTP/1.1"+" "+status_code+" "+reason+"\r\n");
+    add_response("HTTP/1.1 "+status_code+" "+reason+"\r\n");
 }
 
 void Http::add_content_length(size_t len)//添加内容长度
@@ -280,7 +292,8 @@ void Http::add_content_type()//添加内容类型
 
 void Http::add_connection()//添加连接状态
 {
-    add_response("Connection:"+(m_linger==true?"keep-alive":"close")+"\r\n");
+    string s1=(m_linger==true?"keep-alive":"close");
+    add_response("Connection:"+s1+"\r\n");
 }
 
 void Http::add_black_line()//添加\r\n
@@ -294,7 +307,7 @@ void Http::add_headers(size_t len)//生成响应首部，将其写入用户写�
     add_content_length(len);
     add_content_type();
 }
-void Http::add_content(const string text)//添加内容
+void Http::add_content(string text)//添加内容
 {
     add_response(text);
 }
@@ -304,6 +317,7 @@ bool Http::process_write(HTTP_CODE ret)//生成响应报文，将其写入用户
     switch(ret)
     {
     case BAD_REQUEST:
+        m_linger=false;
         add_status_line("400",error_400_title);
         add_headers(error_400_form.size());
         add_black_line();

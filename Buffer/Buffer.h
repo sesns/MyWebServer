@@ -3,6 +3,7 @@
 #include <vector>
 #include <assert.h>
 #include<string>
+using namespace std;
 class Buffer
 {
 private:
@@ -10,22 +11,30 @@ private:
     size_t readeridx;//读指针的位置
     size_t writeidx;//写指针的位置
     size_t read_only_idx;//只用于读，不会更改读指针
+
+    unsigned int writev_cnt;//调用writev的次数
+    size_t m_bytes_have_send;//已经向socket发送的数据
+    size_t m_bytes_to_send;//要向socket发送的数据
+    size_t len1;//第一块数据区的大小
+    size_t len2;//第二块数据区的大小
+    char* start1;//第一块数据区的起始位置
+    char* start2;//第二块数据区的起始位置
 private:
-    char* getBegin() const
+    char* getBegin()
     {
         return &(*m_buffer.begin());
     }
-    char* getWriteBegin() const
+    char* getWriteBegin()
     {
         return &(*(m_buffer.begin()+writeidx));
     }
 
-    char* getReadBegin() const
+    char* getReadBegin()
     {
         return &(*(m_buffer.begin()+readeridx));
     }
 
-    char* getKprependBegin() const
+    char* getKprependBegin()
     {
         return &(*(m_buffer.begin()+kCheapPrepend));
     }
@@ -40,21 +49,37 @@ public:
     :m_buffer(kCheapPrepend+initialSize),
     readeridx(kCheapPrepend),
     writeidx(kCheapPrepend),
-    read_only_idx(kCheapPrepend)
+    read_only_idx(kCheapPrepend),
+    writev_cnt(0),
+    m_bytes_have_send(0),
+    m_bytes_to_send(0),
+    len1(0),
+    len2(0),
+    start1(0),
+    start2(0)
     {
-        assert(prepenableBytes==8);
-        assert(readableBytes==0);
-        assert(writableBytes==initialSize);
+        assert(prepenableBytes()==8);
+        assert(readableBytes()==0);
+        assert(writableBytes()==initialSize);
     }
 
     void init()
     {
-        m_buffer(kCheapPrepend+initialSize);
-        readeridx(kCheapPrepend);
-        writeidx(kCheapPrepend);
-        read_only_idx(kCheapPrepend);
+        m_buffer=std::vector<char>(kCheapPrepend+kInitialSize);
+        readeridx=kCheapPrepend;
+        writeidx=kCheapPrepend;
+        read_only_idx=kCheapPrepend;
+        writev_cnt=0;
+        m_bytes_have_send=0;
+        m_bytes_to_send=0;
+        len1=0;
+        len2=0;
+        start1=0;
+        start2=0;
+        assert(prepenableBytes()==8);
+        assert(readableBytes()==0);
+        assert(writableBytes()==kInitialSize);
     }
-
     bool readFD(int sockfd);//将内核读缓冲区的数据读到应用层读缓冲区中，返回false表示读取错误出错或者对方关闭连接
     int writeFD(int sockfd,struct iovec* iov,int iovcnt);
     //将数据从用户写缓冲区、文件映射地址 写到内核写缓冲区中，返回-1关闭连接，返回0数据因内核缓冲区满没有写完，返回1数据全部发送完毕
@@ -63,7 +88,7 @@ public:
 
     string retriveOneLine();//从缓冲区读取一行
 
-    void append(char* data,size_t len);//将数据加到m_buffer里面
+    void append(const char* data,size_t len);//将数据加到m_buffer里面
 
     char read_only(bool* status)//只用于读，不会更改readeridx指针,若缓冲区以空则status=false
     {
@@ -85,7 +110,7 @@ public:
 
         if(idx<readeridx || idx>=writeidx)//位置出错
         {
-            char res='';
+            char res=' ';
             (*status)=false;
             return res;
         }
@@ -99,22 +124,22 @@ public:
         m_buffer[idx]=c;
     }
 
-    size_t readableBytes() const
+    size_t readableBytes()
     {
         return writeidx-readeridx;
     }
 
-    size_t writableBytes() const
+    size_t writableBytes()
     {
         return m_buffer.size()-writeidx;
     }
 
-    size_t prepenableBytes() const
+    size_t prepenableBytes()
     {
         return readeridx;
     }
 
-    size_t get_read_only_idx() const
+    size_t get_read_only_idx()
     {
         return read_only_idx;
     }
