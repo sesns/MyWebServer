@@ -45,7 +45,13 @@ class Log
 {
 private:
     Log()=default;
-    ~Log()=default;
+    ~Log()
+    {
+        if(m_bqueue)
+            delete m_bqueue;
+        if(m_buffer)
+            delete[] m_buffer;
+    }
 public:
     Log(const Log& l)=delete;
     Log(Log&& l)=delete;
@@ -84,13 +90,6 @@ public:
         return getInstance();
     }
 
-    void free_resources()//释放分配的资源
-    {
-        if(m_bqueue)
-            delete m_bqueue;
-        if(m_buffer)
-            delete[] m_buffer;
-    }
 private:
     void async_write_log()//从阻塞队列取出日志信息写入到日志文件中
     {
@@ -105,17 +104,7 @@ private:
             loc.unlock();
         }
     }
-private:
-    //在Log单例变量消亡时，需要回收资源
-    class deletor
-    {
-    public:
-        ~deletor()
-        {
-            Log::getInstance()->free_resources();
-        };
-    };
-    static deletor del;//定义一个静态成员，在程序结束时，系统会自动调用它的析构函数
+
 };
 
 
