@@ -1,6 +1,7 @@
 #ifndef HTTP_H_INCLUDED
 #define HTTP_H_INCLUDED
 #include "Buffer.h"
+#include "MySQL_connection_pool.h"
 #include<sys/stat.h>
 #include<sys/epoll.h>
 #include <sys/socket.h>
@@ -9,6 +10,7 @@
 #include <fcntl.h>
 #include<sys/mman.h>
 #include<unistd.h>
+#include<unordered_map>
 
 const string m_doc_root="/home/moocos/CodeBlockWebServer/WebServer";//WebServer根目录
 //定义http响应的一些状态信息
@@ -114,6 +116,7 @@ public:
             free(m_iov);
     }
 
+    static void mysqlInit_userAndpawd(MySQL_connection_pool* conn_pool);//将数据库的帐号密码加载到username_to_password
     //新连接的初始化
     void init(int sockfd, const sockaddr_in &addr,int epoll_fd)
     {

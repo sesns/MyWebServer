@@ -1,6 +1,7 @@
 #include<sys/socket.h>
 #include "Http.h"
 #include "Buffer.h"
+#include "MySQL_connection_pool.h"
 #include<string>
 #include<iostream>
 #include<sys/stat.h>
@@ -10,9 +11,41 @@
 #include<unistd.h>
 using namespace std;
 
+unordered_map<string,string> username_to_password;//web页面用户注册的帐号密码
 int Http::m_user_count=0;
 int Http::m_epoll_fd=-1;
 
+void Http::mysqlInit_userAndpawd(MySQL_connection_pool* conn_pool)//将数据库的帐号密码加载到username_to_password
+{
+    if(!conn_pool)
+        return;
+    MYSQL* conn=NULL;
+    MySQLconRAII(&conn,conn_pool);
+
+    if(mysql_query(conn,"SELECT username,password FROM user"))
+    {
+        //日志
+    }
+
+    MYSQL_RES* res=mysql_store_result(conn);
+
+    if(!res)
+    {
+        //日志
+    }
+    else
+    {
+        MYSQL_ROW sql_row;
+        while(sql_row=mysql_fetch_row(res))
+        {
+            username_to_password[sql_row[0]]=sql_row[1];
+        }
+    }
+
+    if(res)
+        mysql_free_result(res);
+
+}
 Http::LINE_STATUS Http::parse_line()//从状态机解析缓冲区中的一行
 {
     char cur=' ';
