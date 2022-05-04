@@ -2,6 +2,7 @@
 #define HTTP_H_INCLUDED
 #include "Buffer.h"
 #include "MySQL_connection_pool.h"
+#include "Locker.h"
 #include<sys/stat.h>
 #include<sys/epoll.h>
 #include <sys/socket.h>
@@ -71,6 +72,7 @@ private:
     struct stat m_file_stat;//文件状态
     struct iovec* m_iov;//用于发送响应报文的iovec,第一个iovec指向用户写缓冲区，第二个iovec指向要发送的文件
     int m_iov_cnt;//iovec数组元素个数
+    locker m_loc;
 
 private:
     LINE_STATUS parse_line();//从状态机解析缓冲区中的一行
@@ -104,6 +106,7 @@ private:
 public:
     static int m_epoll_fd;
     static int m_user_count;
+    static MySQL_connection_pool* m_conn_pool;//数据库连接池
 public:
     Http()
     {
@@ -116,12 +119,13 @@ public:
             free(m_iov);
     }
 
-    static void mysqlInit_userAndpawd(MySQL_connection_pool* conn_pool);//将数据库的帐号密码加载到username_to_password
+    static void mysqlInit_userAndpawd();//将数据库的帐号密码加载到username_to_password
     //新连接的初始化
-    void init(int sockfd, const sockaddr_in &addr,int epoll_fd)
+    void init(int sockfd, const sockaddr_in &addr,int epoll_fd,MySQL_connection_pool* conn_pool)
     {
         m_socket=sockfd;
         m_epoll_fd=epoll_fd;
+        m_conn_pool=conn_pool;
         m_client_address=addr;
         m_user_count+=1;
         add_fd_to_epoll(m_socket);

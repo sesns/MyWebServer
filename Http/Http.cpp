@@ -14,15 +14,16 @@ using namespace std;
 unordered_map<string,string> username_to_password;//web页面用户注册的帐号密码
 int Http::m_user_count=0;
 int Http::m_epoll_fd=-1;
+MySQL_connection_pool* Http::m_conn_pool=NULL;
 
-void Http::mysqlInit_userAndpawd(MySQL_connection_pool* conn_pool)//将数据库的帐号密码加载到username_to_password
+void Http::mysqlInit_userAndpawd()//将数据库的帐号密码加载到username_to_password
 {
-    if(!conn_pool)
+    if(!m_conn_pool)
         return;
     MYSQL* conn=NULL;
-    MySQLconRAII(&conn,conn_pool);
+    MySQLconRAII(&conn,m_conn_pool);
 
-    if(mysql_query(conn,"SELECT username,password FROM user"))
+    if(mysql_query(conn,"SELECT username,passwd FROM user"))
     {
         //日志
     }
@@ -193,14 +194,74 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
     m_real_file=m_doc_root;
 
     //进行登陆校验和注册校验
-    if(m_url.size()>1 && (m_url[1]=='2' || m_url[1]=='3'))
+    if(m_url.size()>1 && m_method=="POST" && (m_url[1]=='2' || m_url[1]=='3'))
     {
+        //从请求报文的报文体中将帐号密码提取出来,帐号密码格式为 user=123&password=123
+        int pos=m_string.find("&");
+        string username=m_string.substr(5,pos-5);
+        string password=m_string.substr(pos+10);
 
+        // 2为登陆校验，3为注册校验
+        if(m_url[1]=='3')//注册校验
+        {
+            if(username_to_password.find(username)==username_to_password.end())//找不到同名的帐号
+            {
+                string sql_insert("INSERT INTO user(username, passwd) VALUES(");
+                sql_insert+="'";
+                sql_insert+=username;
+                sql_insert+="'";
+                sql_insert+=", '";
+                sql_insert+=password;
+                sql_insert+="'";
+                sql_insert+=")";
+
+                MYSQL* conn=NULL;
+                MySQLconRAII(&conn,m_conn_pool);
+
+                m_loc.lock();
+                int res=mysql_query(conn,sql_insert.c_str());//向数据库中插入帐号密码
+                m_loc.unlock();
+
+                if(res==0)//插入成功,跳转到登陆页面
+                {
+                    m_loc.lock();
+                    username_to_password[username]=password;
+                    m_loc.unlock();
+
+                    m_real_file+="/log.html";
+                    m_file_type="text/html";
+                }
+                else//插入失败,跳转到注册失败的页面
+                {
+                    m_real_file+="/registerError.html";
+                    m_file_type="text/html";
+                }
+
+            }
+            else//注册校验失败，跳转到注册失败的页面
+            {
+                m_real_file+="/registerError.html";
+                m_file_type="text/html";
+            }
+        }
+        else if(m_url[1]=='2')//2,登陆校验
+        {
+            if(username_to_password.find(username)!=username_to_password.end() && username_to_password[username]==password)
+            {
+                m_real_file+="/welcome.html";
+                m_file_type="text/html";
+            }
+            else
+            {
+                m_real_file+="/logError.html";
+                m_file_type="text/html";
+            }
+        }
     }
 
 
-    //欢迎页面
-    if(m_url.size()==1 && m_url[0]=='/')
+    //主页面
+    else if(m_url.size()==1 && m_url[0]=='/')
     {
         m_real_file+="/judge.html";
         m_file_type="text/html";
@@ -220,11 +281,24 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
         m_file_type="text/html";
     }
 
-    //表示欢迎的图片
+    //图片页面
+    else if(m_url[1]=='5')
+    {
+        m_real_file+="/picture.html";
+        m_file_type="text/html";
+    }
+
+    //视频页面
+    else if(m_url[1]=='6')
+    {
+        m_real_file+="/video.html";
+        m_file_type="text/html";
+    }
+    //否则就发送url实际请求的文件
     else
     {
-        m_real_file+="/welcome.png";
-        m_file_type="image/png";
+        m_real_file+=m_url;
+        m_file_type="text/html";
     }
 
     //检查是否存在这样的文件
