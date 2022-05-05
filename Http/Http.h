@@ -103,6 +103,19 @@ private:
             m_file_addres = 0;
         }
     }
+
+    void remove_fd_from_epoll(int fd)//从epoll空间中删除fd
+    {
+        epoll_ctl(m_epoll_fd,EPOLL_CTL_DEL,fd,0);
+    }
+
+    void mod_fd_in_epoll(int fd,int old_events)//重置EPOLLONESHOT
+    {
+        epoll_event event;
+        event.data.fd=fd;
+        event.events= old_events | EPOLLET | EPOLLONESHOT | EPOLLRDHUP;
+        epoll_ctl(m_epoll_fd,EPOLL_CTL_MOD,fd,&event);
+    }
 public:
     static int m_epoll_fd;
     static int m_user_count;
@@ -121,11 +134,10 @@ public:
 
     static void mysqlInit_userAndpawd();//将数据库的帐号密码加载到username_to_password
     //新连接的初始化
-    void init(int sockfd, const sockaddr_in &addr,int epoll_fd,MySQL_connection_pool* conn_pool)
+    void init(int sockfd, const sockaddr_in &addr,int epoll_fd)
     {
         m_socket=sockfd;
         m_epoll_fd=epoll_fd;
-        m_conn_pool=conn_pool;
         m_client_address=addr;
         m_user_count+=1;
         add_fd_to_epoll(m_socket);
@@ -162,19 +174,6 @@ public:
         event.events= EPOLLET | EPOLLIN | EPOLLONESHOT | EPOLLRDHUP;
         epoll_ctl(m_epoll_fd,EPOLL_CTL_ADD,fd,&event);
         set_noblocking(fd);
-    }
-
-    void remove_fd_from_epoll(int fd)//从epoll空间中删除fd
-    {
-        epoll_ctl(m_epoll_fd,EPOLL_CTL_DEL,fd,0);
-    }
-
-    void mod_fd_in_epoll(int fd,int old_events)//重置EPOLLONESHOT
-    {
-        epoll_event event;
-        event.data.fd=fd;
-        event.events= old_events | EPOLLET | EPOLLONESHOT | EPOLLRDHUP;
-        epoll_ctl(m_epoll_fd,EPOLL_CTL_MOD,fd,&event);
     }
 
     bool Read();//将数据从内核读缓冲区读取到用户的读缓冲区,返回false说明对方关闭连接或读取出错

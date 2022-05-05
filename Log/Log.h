@@ -44,7 +44,13 @@ public:
 class Log
 {
 private:
-    Log()=default;
+    Log()
+    {
+        m_bqueue=NULL;
+        m_buffer=NULL;
+        m_is_asy=false;
+        m_fp=NULL;
+    }
     ~Log()
     {
         if(m_bqueue)
@@ -77,7 +83,7 @@ public:
         static Log m_log_instance;
         return &m_log_instance;
     }
-    bool init(const char* dir,const char* filename,size_t max_queue_size=0,size_t max_lines=5000000,size_t buffer_size=8192);
+    bool init(const char* dir,const char* filename,size_t max_queue_size=0,size_t max_lines=5000000,size_t buffer_size=2000);
 
 
     //将日志信息格式化输出（同步则直接输出到日志文件，异步则将其加入阻塞队列）

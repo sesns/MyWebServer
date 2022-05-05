@@ -22,7 +22,7 @@ public:
     MySQL_connection_pool(MySQL_connection_pool&& mcp)=delete;
     MySQL_connection_pool& operator=(const MySQL_connection_pool& mcp)=delete;
     MySQL_connection_pool& operator=(MySQL_connection_pool&& mcp)=delete;
-    MySQL_connection_pool* getInstance()//单例模式
+    static MySQL_connection_pool* getInstance()//单例模式
     {
         static MySQL_connection_pool m_instance;
         return &m_instance;

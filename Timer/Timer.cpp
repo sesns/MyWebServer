@@ -4,11 +4,7 @@
 
 void Timer::timeout_event()
 {
-    struct tm* ptminfo=localtime(&m_expected_time);
-    printf("expected time: %02d-%02d-%02d %02d:%02d:%02d\n",
-            ptminfo->tm_year + 1900, ptminfo->tm_mon + 1, ptminfo->tm_mday,
-            ptminfo->tm_hour, ptminfo->tm_min, ptminfo->tm_sec);
-
+    m_user->close_conn();//关闭连接
 }
 
 void TimerList::Insert(Timer* t)
@@ -40,9 +36,9 @@ void TimerList::Remove(Timer* t)
     Next_node->pre=Pre_node;
 }
 
-Timer* TimerList::Insert(time_t t)
+Timer* TimerList::Insert(time_t t,Http* user)
 {
-    Timer* cur=new Timer(t);
+    Timer* cur=new Timer(t,user);
     Insert(cur);
     return cur;
 }

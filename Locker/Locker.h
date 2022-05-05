@@ -1,6 +1,7 @@
 #ifndef LOCKER_H_INCLUDED
 #define LOCKER_H_INCLUDED
 
+#include<iostream>
 #include<exception>
 #include<pthread.h>
 #include<semaphore.h>

@@ -84,6 +84,8 @@ bool Log::init(const char* dir,const char* filename,size_t max_queue_size,size_t
 //将日志信息格式化输出（同步则直接输出到日志文件，异步则将其加入阻塞队列）
     void Log::write_log(Log_mode level, const char *format, ...)
     {
+        if(!m_buffer)//如果没有进行init，m_buffer==NULL,则返回，这相当于关闭了日志系统
+            return;
         char mode[16];
         time_t t = time(NULL);
         struct tm *sys_tm = localtime(&t);
