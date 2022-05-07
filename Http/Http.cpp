@@ -343,6 +343,12 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
     {
         m_real_file+=m_url;
         m_file_type="text/html";
+        string file_type=m_url.substr(m_url.size()-3,3);
+
+        if(file_type=="jpg")
+            m_file_type="image/jpeg";
+        else if(file_type=="mp4")
+            m_file_type="video/mpeg4";
     }
 
     //检查是否存在这样的文件

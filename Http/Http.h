@@ -13,7 +13,7 @@
 #include<unistd.h>
 #include<unordered_map>
 
-const string m_doc_root="/home/moocos/CodeBlockWebServer/WebServer";//WebServer根目录
+const string m_doc_root="/home/moocos/CodeBlockWebServer/WebServer/html_files";
 //定义http响应的一些状态信息
 const string ok_200_title = "OK";
 const string error_400_title = "Bad Request";
