@@ -5,6 +5,7 @@
 #include<queue>
 #include <vector>
 #include "Locker.h"
+#include "Log.h"
 
 using namespace std;
 
@@ -40,9 +41,15 @@ public:
         for(int i=0;i<m_thread_num;i++)
         {
             if(pthread_create(m_threads+i,NULL,run,this)!=0)
+            {
+                Log::getInstance()->write_log(ERRO,"Threadpool failed to create pthread");
                 throw exception();
+            }
             if(pthread_detach(*(m_threads+i))!=0)//将线程转换为unjoinable状态，这样线程结束时就可以自动回收资源
+            {
+                Log::getInstance()->write_log(ERRO,"Threadpool failed to detach pthread");
                 throw exception();
+            }
         }
     }
     bool append(T task);//将任务加入请求队列中
@@ -72,6 +79,7 @@ bool Threadpool<T>::append(T task)
         if(m_queue.size()>=m_queue_num)
         {
             loc.unlock();
+            Log::getInstance()->write_log(WARN,"Threadpool failed to append task");
             return false;//超出最大队列长度，添加失败
         }
 
@@ -97,6 +105,8 @@ void Threadpool<T>::work()
             m_queue.pop();
             loc.unlock();
 
+            pthread_t cur_id=pthread_self();//获取当前线程id
+            Log::getInstance()->write_log(INFO,"pthread:%d begin to execute process()",cur_id);
             cur_task->process();//执行任务
         }
 }

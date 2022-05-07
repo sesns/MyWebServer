@@ -2,6 +2,7 @@
 #include<queue>
 #include<mysql.h>
 #include<vector>
+#include "Log.h"
 using namespace std;
 
 void MySQL_connection_pool::init(size_t max_con_num,string host,string username,string password,string DBname,unsigned int port)
@@ -19,14 +20,14 @@ void MySQL_connection_pool::init(size_t max_con_num,string host,string username,
         conn_ptr=mysql_init(conn_ptr);
         if(!conn_ptr)
         {
-            cout<<"Error:"<<mysql_error(conn_ptr)<<"\n";
+            Log::getInstance()->write_log(ERRO,"MySQL_connection_pool::init,mysql_init failed. %s",mysql_error(conn_ptr));
             exit(1);
         }
 
         conn_ptr=mysql_real_connect(conn_ptr,m_host.c_str(),m_username.c_str(),m_password.c_str(),m_DBname.c_str(),m_port,NULL,0);
         if(!conn_ptr)
         {
-            cout<<"MySQL Connection failed:"<<mysql_error(conn_ptr)<<"\n";
+            Log::getInstance()->write_log(ERRO,"MySQL_connection_pool::init,mysql_connection failed. %s",mysql_error(conn_ptr));
             exit(1);
         }
 

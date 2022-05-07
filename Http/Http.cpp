@@ -9,6 +9,7 @@
 #include<fcntl.h>
 #include<sys/mman.h>
 #include<unistd.h>
+#include "Log.h"
 using namespace std;
 
 unordered_map<string,string> username_to_password;//web页面用户注册的帐号密码
@@ -25,14 +26,16 @@ void Http::mysqlInit_userAndpawd()//将数据库的帐号密码加载到username
 
     if(mysql_query(conn,"SELECT username,passwd FROM user"))
     {
-        //日志
+        Log::getInstance()->write_log(ERRO,"in Http::mysqlInit_userAndpawd,mysql_query failed");
+        return;
     }
 
     MYSQL_RES* res=mysql_store_result(conn);
 
     if(!res)
     {
-        //日志
+        Log::getInstance()->write_log(ERRO,"in Http::mysqlInit_userAndpawd,mysql_store_result failed");
+        return;
     }
     else
     {
@@ -73,6 +76,7 @@ Http::LINE_STATUS Http::parse_line()//从状态机解析缓冲区中的一行
             }
             else
             {
+                Log::getInstance()->write_log(WARN,"in  Http::parse_line,the message has sytax error");
                 return LINE_BAD;
             }
         }
@@ -90,7 +94,10 @@ Http::LINE_STATUS Http::parse_line()//从状态机解析缓冲区中的一行
                 return LINE_OK;
             }
             else
+            {
+                Log::getInstance()->write_log(WARN,"in  Http::parse_line,the message has sytax error");
                 return LINE_BAD;
+            }
         }
 
         cur=m_readbuffer.read_only(&flag);
@@ -104,7 +111,10 @@ Http::HTTP_CODE Http::parse_request_line(const string& text)//解析请求行
     //找到第一个空格的位置
     int first_space_pos=text.find(" ");
     if(first_space_pos==-1)
+    {
+        Log::getInstance()->write_log(WARN,"in Http::parse_request_line,the request line has sytax error");
         return BAD_REQUEST;
+    }
 
     //处理请求方式
     string method=text.substr(0,first_space_pos);
@@ -113,16 +123,25 @@ Http::HTTP_CODE Http::parse_request_line(const string& text)//解析请求行
     else if(method=="POST")
         m_method="POST";
     else
+    {
+        Log::getInstance()->write_log(WARN,"in Http::parse_request_line,the request line has sytax error");
         return BAD_REQUEST;
+    }
 
     //如果前两个字段间有多余的空格
     if((first_space_pos+1)>=text.size() || text[first_space_pos+1]==' ')
+    {
+        Log::getInstance()->write_log(WARN,"in Http::parse_request_line,the request line has sytax error");
         return BAD_REQUEST;
+    }
 
     //找到第二个空格的位置
     int second_space_pos=text.find(" ",first_space_pos+1);
     if(second_space_pos==-1)
+    {
+        Log::getInstance()->write_log(WARN,"in Http::parse_request_line,the request line has sytax error");
         return BAD_REQUEST;
+    }
 
     //处理请求url和版本
     string url=text.substr(first_space_pos+1,second_space_pos-first_space_pos-1);
@@ -131,10 +150,16 @@ Http::HTTP_CODE Http::parse_request_line(const string& text)//解析请求行
     if(version=="HTTP/1.1")//仅支持HTTP1.1
         m_version=version;
     else
+    {
+        Log::getInstance()->write_log(WARN,"in Http::parse_request_line,don't support ohter http version except http1.1 ");
         return BAD_REQUEST;
+    }
 
     if(url=="" || url[0]!='/')
+    {
+        Log::getInstance()->write_log(WARN,"in Http::parse_request_line,the request line has sytax error");
         return BAD_REQUEST;
+    }
     else
         m_url=url;
 
@@ -158,7 +183,10 @@ Http::HTTP_CODE Http::parse_header(const string& text)//解析请求首部
             return NO_REQUEST;
         }
         else
+        {
+            Log::getInstance()->write_log(WARN,"in Http::parse_header,don't support other method");
             return BAD_REQUEST;
+        }
     }
     else if(text.find("Connection:")!=-1)//Connection字段
     {
@@ -167,14 +195,20 @@ Http::HTTP_CODE Http::parse_header(const string& text)//解析请求首部
         else if(text.find("close")!=-1)
             m_linger=false;
         else
+        {
+            Log::getInstance()->write_log(WARN,"in Http::parse_header,the header has syntax error");
             return BAD_REQUEST;
+        }
     }
     else if(text.find("Content-length:")!=-1)//Content-length字段
     {
         string len=text.substr(15,text.size()-15);
         for(int i=0;i<len.size();i++)
             if(!isdigit(len[i]))
+            {
+                Log::getInstance()->write_log(WARN,"in Http::parse_header,the header has syntax error");
                 return BAD_REQUEST;
+            }
         m_content_length=stoi(len);
     }
     else if(text.find("Host:")!=-1)//Host字段
@@ -183,7 +217,7 @@ Http::HTTP_CODE Http::parse_header(const string& text)//解析请求首部
     }
     else
     {
-        std::cout<<"unknown header!\n";
+        Log::getInstance()->write_log(WARN,"in Http::parse_header,unknown header");
     }
 
     return NO_REQUEST;
@@ -230,11 +264,15 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
 
                     m_real_file+="/log.html";
                     m_file_type="text/html";
+
+                    Log::getInstance()->write_log(INFO,"in Http::do_request,register success");
                 }
                 else//插入失败,跳转到注册失败的页面
                 {
                     m_real_file+="/registerError.html";
                     m_file_type="text/html";
+
+                    Log::getInstance()->write_log(INFO,"in Http::do_request,register error");
                 }
 
             }
@@ -242,6 +280,8 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
             {
                 m_real_file+="/registerError.html";
                 m_file_type="text/html";
+
+                Log::getInstance()->write_log(INFO,"in Http::do_request,register error");
             }
         }
         else if(m_url[1]=='2')//2,登陆校验
@@ -250,11 +290,15 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
             {
                 m_real_file+="/welcome.html";
                 m_file_type="text/html";
+
+                Log::getInstance()->write_log(INFO,"in Http::do_request,log success");
             }
             else
             {
                 m_real_file+="/logError.html";
                 m_file_type="text/html";
+
+                Log::getInstance()->write_log(INFO,"in Http::do_request,log error");
             }
         }
     }
@@ -303,15 +347,24 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
 
     //检查是否存在这样的文件
     if(stat(m_real_file.c_str(),&m_file_stat)<0)
+    {
+        Log::getInstance()->write_log(INFO,"in Http::do_request,no_resource");
         return NO_RESOURCE;
+    }
 
     //检查是否有权限请求该文件
     if(!(m_file_stat.st_mode & S_IROTH))
+    {
+        Log::getInstance()->write_log(INFO,"in Http::do_request,forbidden_request");
         return FORBIDDEN_REQUEST;
+    }
 
     //检查文件类型，如果为目录则返回语法错误
     if(S_ISDIR(m_file_stat.st_mode))
+    {
+        Log::getInstance()->write_log(INFO,"in Http::do_request,can't request dir");
         return BAD_REQUEST;
+    }
 
     //以只读的方式打开文件
     int fd=open(m_real_file.c_str(),O_RDONLY);
@@ -464,6 +517,7 @@ bool Http::process_write(HTTP_CODE ret)//生成响应报文，将其写入用户
 
     default:
         return false;
+        break;
 
     }
 

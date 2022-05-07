@@ -104,6 +104,15 @@ private:
         }
     }
 
+    void add_fd_to_epoll(int fd)//将fd添加到epoll空间，ET模式，EPOLLIN | EPOLLONESHOT
+    {
+        epoll_event event;
+        event.data.fd=fd;
+        event.events= EPOLLET | EPOLLIN | EPOLLONESHOT | EPOLLRDHUP;
+        epoll_ctl(m_epoll_fd,EPOLL_CTL_ADD,fd,&event);
+        set_noblocking(fd);
+    }
+
     void remove_fd_from_epoll(int fd)//从epoll空间中删除fd
     {
         epoll_ctl(m_epoll_fd,EPOLL_CTL_DEL,fd,0);
@@ -134,10 +143,9 @@ public:
 
     static void mysqlInit_userAndpawd();//将数据库的帐号密码加载到username_to_password
     //新连接的初始化
-    void init(int sockfd, const sockaddr_in &addr,int epoll_fd)
+    void init(int sockfd, const sockaddr_in &addr)
     {
         m_socket=sockfd;
-        m_epoll_fd=epoll_fd;
         m_client_address=addr;
         m_user_count+=1;
         add_fd_to_epoll(m_socket);
@@ -167,15 +175,6 @@ public:
 
     }
 
-    void add_fd_to_epoll(int fd)//将fd添加到epoll空间，ET模式，EPOLLIN | EPOLLONESHOT
-    {
-        epoll_event event;
-        event.data.fd=fd;
-        event.events= EPOLLET | EPOLLIN | EPOLLONESHOT | EPOLLRDHUP;
-        epoll_ctl(m_epoll_fd,EPOLL_CTL_ADD,fd,&event);
-        set_noblocking(fd);
-    }
-
     bool Read();//将数据从内核读缓冲区读取到用户的读缓冲区,返回false说明对方关闭连接或读取出错
     bool Write();//将数据从用户写缓冲区、文件映射地址 写到内核写缓冲区中，返回false说明要关闭连接
     void process()
@@ -183,8 +182,8 @@ public:
         HTTP_CODE ret=process_read();//解析报文
         if(ret==NO_REQUEST)
             mod_fd_in_epoll(m_socket,EPOLLIN);//重置EPOLLONESHOT
-        if(process_write(ret)==false);//生成响应报文，将其写入用户写缓冲区中
-            close_conn();
+
+        process_write(ret);//生成响应报文，将其写入用户写缓冲区中
 
         mod_fd_in_epoll(m_socket,EPOLLOUT);//重置EPOLLONESHOT
 

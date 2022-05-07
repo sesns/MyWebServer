@@ -4,6 +4,7 @@
 #include<errno.h>
 #include <assert.h>
 #include <string>
+#include "Log.h"
 int extern errno;
 using namespace std;
 
@@ -95,10 +96,14 @@ bool Buffer::readFD(int sockfd)
         {
             if(errno==EAGAIN || errno==EWOULDBLOCK)//内核读缓冲区数据已经读取完毕
                 break;
+            Log::getInstance()->write_log(ERRO,"in Buffer::readFD,readv unknown error");
             return false;//读取遇到其他错误
         }
         else if(bytes_recv==0)//对方关闭连接
+        {
+            Log::getInstance()->write_log(INFO,"in Buffer::readFD,client close connection");
             return false;
+        }
 
         if(bytes_recv<=writable_bytes)//第一块缓冲区足以容纳数据
             writeidx+=bytes_recv;
@@ -146,6 +151,7 @@ int Buffer::writeFD(int sockfd,struct iovec* iov,int iovcnt)
         {
             if(errno==EAGAIN || errno==EWOULDBLOCK)
                 return 0;
+            Log::getInstance()->write_log(ERRO,"in Buffer::writeFD,writev unknown error");
             return -1;
         }
 
