@@ -5,6 +5,7 @@
 #include<exception>
 #include<pthread.h>
 #include<semaphore.h>
+#include<errno.h>
 using namespace std;
 class sem
 {
@@ -64,7 +65,10 @@ public:
 	{
 		int ret=pthread_mutex_destroy(&mtx);
 		if(ret!=0)
-			cout<<"mutex_destroy error!\n";
+        {
+            cout<<"mutex_destroy error!\n";
+            cout<<ret<<"\n";
+        }
 	}
 
 	bool lock()
@@ -105,7 +109,10 @@ public:
 	{
 		int ret=pthread_cond_destroy(&cnd);
 		if(ret!=0)
-			cout<<"cond_destroy error!\n";
+        {
+            cout<<"cond_destroy error!\n";
+            cout<<ret<<"\n";
+        }
 	}
 
 	bool wait(pthread_mutex_t* m_mutex)

@@ -47,7 +47,12 @@ private:
 public:
     Server(unsigned short port,size_t mysql_con_num,string user,string pawd,string dbname,int thread_num,bool close_log,bool is_async)
     {
+        m_users=NULL;
+        m_events=NULL;
+        m_client_timer=NULL;
         m_port=port;
+
+        loginit(close_log,is_async);
 
         eventlisten();
 
@@ -56,8 +61,6 @@ public:
         mysqlinit(mysql_con_num,user,pawd,dbname);
 
         threadinit(thread_num);
-
-        loginit(close_log,is_async);
 
         timerinit(m_epollfd);
 
@@ -73,6 +76,7 @@ public:
             delete[] m_client_timer;
         close(m_listenfd);
         close(m_epollfd);
+
     }
 
     void enentloop();

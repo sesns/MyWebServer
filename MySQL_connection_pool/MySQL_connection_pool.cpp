@@ -16,7 +16,7 @@ void MySQL_connection_pool::init(size_t max_con_num,string host,string username,
 
     for(int i=0;i<max_con_num;i++)
     {
-        MYSQL* conn_ptr;
+        MYSQL* conn_ptr=NULL;
         conn_ptr=mysql_init(conn_ptr);
         if(!conn_ptr)
         {

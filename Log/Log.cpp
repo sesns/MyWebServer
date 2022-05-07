@@ -44,13 +44,16 @@ void BlockQueue::pop(string& ret)//消费者
 
 bool Log::init(const char* dir,const char* filename,size_t max_queue_size,size_t max_lines,size_t buffer_size)
     {
+        close_thread=false;
         if(max_queue_size>0)//采取异步写入机制
         {
             m_is_asy=true;
             m_bqueue=new BlockQueue(max_queue_size);
 
-            pthread_create(&m_thread,NULL,process_task,NULL);
-            pthread_detach(m_thread);
+            if(pthread_create(&m_thread,NULL,process_task,NULL)!=0)
+                throw exception();
+            if(pthread_detach(m_thread)!=0)
+                throw exception();
         }
         else
         {

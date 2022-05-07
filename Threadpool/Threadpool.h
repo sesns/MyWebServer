@@ -13,7 +13,10 @@ template <typename T>
 class Threadpool
 {
 private:
-    Threadpool()=default;
+    Threadpool()
+    {
+        m_threads=NULL;
+    }
     ~Threadpool()
     {
         stop=true;
@@ -29,6 +32,10 @@ public:
     {
         static Threadpool m_instance;
         return &m_instance;
+    }
+    void stop_threads()
+    {
+        stop=true;
     }
     void init(int thread_num,int max_queue_num=10000)
     {

@@ -35,13 +35,19 @@ string Buffer::retrieveAsString(size_t len)//从缓冲区读取长为len的数�
 string Buffer::retriveOneLine()//从缓冲区读取一行
 {
     size_t idx=readeridx;
-    while(idx< writeidx && m_buffer[idx]!='\0')
+    while(idx< writeidx && m_buffer[idx]!='\r')
     {
         idx++;
     }
+
     size_t len=idx-readeridx;
-    if(idx< writeidx && m_buffer[idx]=='\0')
-        len+=2;
+    if(m_buffer[idx]=='\r' && idx<writeidx-1 && m_buffer[idx+1]=='\n')
+    {
+        string res=retrieveAsString(len);
+        retrieveAsString(2);
+        return res;
+    }
+
     return retrieveAsString(len);
 }
 void Buffer::make_space(size_t len)

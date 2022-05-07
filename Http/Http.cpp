@@ -68,10 +68,6 @@ Http::LINE_STATUS Http::parse_line()//从状态机解析缓冲区中的一行
 
             if(cur=='\n')
             {
-                size_t idx1=m_readbuffer.get_read_only_idx()-1;
-                size_t idx2=m_readbuffer.get_read_only_idx()-2;
-                m_readbuffer.set_char(idx1,'\0');
-                m_readbuffer.set_char(idx2,'\0');
                 return LINE_OK;
             }
             else
@@ -87,10 +83,6 @@ Http::LINE_STATUS Http::parse_line()//从状态机解析缓冲区中的一行
             char prechar=m_readbuffer.get_char(idx,&temp);
             if(temp==true && prechar=='\r')
             {
-                size_t idx1=m_readbuffer.get_read_only_idx()-1;
-                size_t idx2=m_readbuffer.get_read_only_idx()-2;
-                m_readbuffer.set_char(idx1,'\0');
-                m_readbuffer.set_char(idx2,'\0');
                 return LINE_OK;
             }
             else
@@ -173,10 +165,12 @@ Http::HTTP_CODE Http::parse_header(const string& text)//解析请求首部
     //判断是空行还是请求首部
     //如果text=='\r\n'并且报文为GET方法，直接返回GET_REQUEST
     //如果text=='\r\n'并且报文为POST方法,状态转移到CHECK_CONTENT
-    if(text=="\0")
+    if(text=="")
     {
         if(m_method=="GET")
+        {
             return GET_REQUEST;
+        }
         else if(m_method=="POST")
         {
             m_check_status=CHECK_CONTENT;
@@ -226,7 +220,6 @@ Http::HTTP_CODE Http::parse_header(const string& text)//解析请求首部
 Http::HTTP_CODE Http::do_request()//报文响应函数
 {
     m_real_file=m_doc_root;
-
     //进行登陆校验和注册校验
     if(m_url.size()>1 && m_method=="POST" && (m_url[1]=='2' || m_url[1]=='3'))
     {
@@ -309,6 +302,7 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
     {
         m_real_file+="/judge.html";
         m_file_type="text/html";
+        Log::getInstance()->write_log(DEBUG,"in Http::do_request,request file is /judge.html");
     }
 
     //表示请求注册页面
@@ -316,6 +310,7 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
     {
         m_real_file+="/register.html";
         m_file_type="text/html";
+        Log::getInstance()->write_log(DEBUG,"in Http::do_request,request file is /register.html");
     }
 
     //表示请求登陆页面
@@ -323,6 +318,7 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
     {
         m_real_file+="/log.html";
         m_file_type="text/html";
+        Log::getInstance()->write_log(DEBUG,"in Http::do_request,request file is /log.html");
     }
 
     //图片页面
@@ -330,6 +326,7 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
     {
         m_real_file+="/picture.html";
         m_file_type="text/html";
+        Log::getInstance()->write_log(DEBUG,"in Http::do_request,request file is /picture.html");
     }
 
     //视频页面
@@ -337,6 +334,7 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
     {
         m_real_file+="/video.html";
         m_file_type="text/html";
+        Log::getInstance()->write_log(DEBUG,"in Http::do_request,request file is /video.html");
     }
     //否则就发送url实际请求的文件
     else
@@ -349,6 +347,8 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
             m_file_type="image/jpeg";
         else if(file_type=="mp4")
             m_file_type="video/mpeg4";
+
+        Log::getInstance()->write_log(DEBUG,"in Http::do_request,request file is %s",m_real_file.c_str());
     }
 
     //检查是否存在这样的文件
@@ -398,7 +398,6 @@ Http::HTTP_CODE Http::process_read()
             return BAD_REQUEST;
 
         text=m_readbuffer.retriveOneLine();
-
         switch(m_check_status)
         {
             case CHECK_REQUESTLINE:
@@ -409,11 +408,13 @@ Http::HTTP_CODE Http::process_read()
             case CHECK_HEADER:
                 //如果text=='\r\n'并且报文为GET方法，直接返回GET_REQUEST
                 //如果text=='\r\n'并且报文为POST方法,状态转移到CHECK_CONTENT
-                ret==parse_header(text);
+                ret=parse_header(text);
                 if(ret==BAD_REQUEST)
                     return BAD_REQUEST;
                 else if(ret==GET_REQUEST)
-                    return do_request();//报文响应函数
+                {
+                    return do_request();
+                }//报文响应函数
                 break;
             default:
                 return INTERNAL_ERROR;

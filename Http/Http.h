@@ -132,6 +132,7 @@ public:
 public:
     Http()
     {
+        m_iov=NULL;
         m_iov_cnt=1;
         m_iov=(struct iovec*)malloc(m_iov_cnt*sizeof(struct iovec));
     }

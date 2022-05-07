@@ -36,6 +36,9 @@ private:
 public:
     TimerList()
     {
+        head=NULL;
+        tail=NULL;
+
         head=new Timer(0,NULL);
         tail=new Timer(0,NULL);
 

@@ -46,6 +46,7 @@ class Log
 private:
     Log()
     {
+        close_thread=false;
         m_bqueue=NULL;
         m_buffer=NULL;
         m_is_asy=false;
@@ -65,6 +66,7 @@ public:
     Log& operator=(Log&& l)=delete;
 private:
     bool m_is_asy;//是否为异步
+    bool close_thread;//是否停止异步写线程
     BlockQueue* m_bqueue;//阻塞队列
     size_t m_max_lines;//一个日志文件的最大行数
     size_t m_count;//记录当前日志文件的行数
@@ -96,12 +98,17 @@ public:
         return getInstance();
     }
 
+    void close_log()
+    {
+        close_thread=true;
+    }
+
 private:
     void async_write_log()//从阻塞队列取出日志信息写入到日志文件中
     {
         string single_log;
 
-        while(1)
+        while(!close_thread)
         {
             m_bqueue->pop(single_log);
             loc.lock();

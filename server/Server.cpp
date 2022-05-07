@@ -67,11 +67,12 @@ void Server::timerinit(int epoll_fd)
 void Server::eventlisten()//创建监听socket、创建epoll
     {
         m_listenfd=socket(PF_INET,SOCK_STREAM,0);
-
+        assert(m_listenfd!=-1);
         //网络地址初始化
         struct sockaddr_in addr;
         addr.sin_port=htons(m_port);
-        addr.sin_addr.s_addr=htonl(INADDR_ANY);
+        addr.sin_addr.s_addr=inet_addr("127.0.0.1");
+        addr.sin_family=AF_INET;
 
         //初始化监听socket
         int ret=bind(m_listenfd,(struct sockaddr*)&addr,sizeof(addr));
@@ -177,6 +178,8 @@ void Server::enentloop()
                         case SIGTERM:
                             stop_server=true;
                             Log::getInstance()->write_log(INFO,"receive SIGTERM");
+                            Log::getInstance()->close_log();//停止写线程的循环
+                            Threadpool<Http*>::getInstance()->stop_threads();//停止线程池线程的循环
                             break;
                         case SIGALRM:
                             timeout=true;

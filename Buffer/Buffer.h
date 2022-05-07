@@ -119,11 +119,6 @@ public:
         return m_buffer[idx];
     }
 
-    void set_char(size_t idx,char c)//修改idx位置的字符为c
-    {
-        m_buffer[idx]=c;
-    }
-
     size_t readableBytes()
     {
         return writeidx-readeridx;
