@@ -71,7 +71,7 @@ void Server::eventlisten()//创建监听socket、创建epoll
         //网络地址初始化
         struct sockaddr_in addr;
         addr.sin_port=htons(m_port);
-        addr.sin_addr.s_addr=inet_addr("127.0.0.1");
+        addr.sin_addr.s_addr=inet_addr("10.0.2.15");
         addr.sin_family=AF_INET;
 
         //初始化监听socket
@@ -121,7 +121,6 @@ void Server::dealwith_conn()
 
             //http类对象初始化
             m_users[connfd].init(connfd,client_address);
-
             //生成定时器
             time_t cur = time(NULL);
             Timer* t=m_sigframe->insert(cur+3*TIME_SLOT,&m_users[connfd]);
@@ -154,19 +153,22 @@ void Server::enentloop()
 
                 if(sockfd==m_listenfd)//处理新到来的连接（ET模式）
                 {
+                    Log::getInstance()->write_log(DEBUG,"in evenloop,new conn");
                     dealwith_conn();
                 }
                 else if(m_events[i].events & (EPOLLHUP | EPOLLERR | EPOLLRDHUP))//关闭连接
                 {
+                    Log::getInstance()->write_log(DEBUG,"in evenloop,HUP OR ERR");
+
                     m_users[sockfd].close_conn();
                     Timer* t=m_client_timer[sockfd].m_timer;
                     m_sigframe->remove(t);
-
                     Log::getInstance()->write_log(INFO,"client close connection");
 
                 }
                 else if(sockfd==m_read_pipfd && (m_events[i].events & EPOLLIN))//信号事件
                 {
+                    Log::getInstance()->write_log(DEBUG,"in evenloop,sig");
                     char signals[1024];
                     int ret=recv(m_read_pipfd,signals,sizeof(signals),0);
                     if(ret==-1)
@@ -191,6 +193,7 @@ void Server::enentloop()
                 //处理客户连接上的数据
                 else if(m_events[i].events & EPOLLIN)//可读事件
                 {
+                    Log::getInstance()->write_log(DEBUG,"in evenloop,read");
                     bool ret=m_users[sockfd].Read();
                     if(ret==false)//关闭连接
                     {
@@ -219,6 +222,7 @@ void Server::enentloop()
                 }
                 else if(m_events[i].events & EPOLLOUT)//可写事件
                 {
+                    Log::getInstance()->write_log(DEBUG,"in evenloop,write");
                     bool ret=m_users[sockfd].Write();
                     if(ret==false)//关闭连接
                     {
@@ -241,6 +245,7 @@ void Server::enentloop()
 
                 if(timeout)//将超时事件延后到此处，是因为处理客户连接的数据更加重要
                 {
+                    Log::getInstance()->write_log(DEBUG,"in evenloop,process timeout");
                     m_sigframe->tick();
                     timeout=false;
                 }

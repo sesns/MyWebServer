@@ -65,7 +65,6 @@ public:
 
     void init()
     {
-        m_buffer=std::vector<char>(kCheapPrepend+kInitialSize);
         readeridx=kCheapPrepend;
         writeidx=kCheapPrepend;
         read_only_idx=kCheapPrepend;

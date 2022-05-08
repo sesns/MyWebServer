@@ -54,8 +54,10 @@ public:
             delete temp;
         }
 
-        delete head;
-        delete tail;
+        if(head)
+            delete head;
+        if(tail)
+            delete tail;
 
     }
 

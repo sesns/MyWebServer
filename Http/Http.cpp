@@ -19,6 +19,7 @@ MySQL_connection_pool* Http::m_conn_pool=NULL;
 
 void Http::mysqlInit_userAndpawd()//将数据库的帐号密码加载到username_to_password
 {
+    Log::getInstance()->write_log(DEBUG,"in Http::mysqlInit_userAndpawd");
     if(!m_conn_pool)
         return;
     MYSQL* conn=NULL;
@@ -52,6 +53,7 @@ void Http::mysqlInit_userAndpawd()//将数据库的帐号密码加载到username
 }
 Http::LINE_STATUS Http::parse_line()//从状态机解析缓冲区中的一行
 {
+    Log::getInstance()->write_log(DEBUG,"in Http::parse_line");
     char cur=' ';
     bool flag;
     cur=m_readbuffer.read_only(&flag);//flag为true时说明读取成功
@@ -100,6 +102,7 @@ Http::LINE_STATUS Http::parse_line()//从状态机解析缓冲区中的一行
 
 Http::HTTP_CODE Http::parse_request_line(const string& text)//解析请求行
 {
+    Log::getInstance()->write_log(DEBUG,"in Http::parse_request_line");
     //找到第一个空格的位置
     int first_space_pos=text.find(" ");
     if(first_space_pos==-1)
@@ -162,6 +165,7 @@ Http::HTTP_CODE Http::parse_request_line(const string& text)//解析请求行
 
 Http::HTTP_CODE Http::parse_header(const string& text)//解析请求首部
 {
+    Log::getInstance()->write_log(DEBUG,"in Http::parse_header");
     //判断是空行还是请求首部
     //如果text=='\r\n'并且报文为GET方法，直接返回GET_REQUEST
     //如果text=='\r\n'并且报文为POST方法,状态转移到CHECK_CONTENT
@@ -190,17 +194,17 @@ Http::HTTP_CODE Http::parse_header(const string& text)//解析请求首部
             m_linger=false;
         else
         {
-            Log::getInstance()->write_log(WARN,"in Http::parse_header,the header has syntax error");
+            Log::getInstance()->write_log(WARN,"in Http::parse_header,the header connection has syntax error");
             return BAD_REQUEST;
         }
     }
-    else if(text.find("Content-length:")!=-1)//Content-length字段
+    else if(text.find("Content-Length: ")!=-1)//Content-length字段
     {
-        string len=text.substr(15,text.size()-15);
+        string len=text.substr(16,text.size()-16);
         for(int i=0;i<len.size();i++)
             if(!isdigit(len[i]))
             {
-                Log::getInstance()->write_log(WARN,"in Http::parse_header,the header has syntax error");
+                Log::getInstance()->write_log(WARN,"in Http::parse_header,the header contentlength has syntax error");
                 return BAD_REQUEST;
             }
         m_content_length=stoi(len);
@@ -219,9 +223,10 @@ Http::HTTP_CODE Http::parse_header(const string& text)//解析请求首部
 
 Http::HTTP_CODE Http::do_request()//报文响应函数
 {
+    Log::getInstance()->write_log(DEBUG,"in Http::do_request");
     m_real_file=m_doc_root;
     //进行登陆校验和注册校验
-    if(m_url.size()>1 && m_method=="POST" && (m_url[1]=='2' || m_url[1]=='3'))
+    if(m_url.size()==2 && m_method=="POST" && (m_url[1]=='2' || m_url[1]=='3'))
     {
         //从请求报文的报文体中将帐号密码提取出来,帐号密码格式为 user=123&password=123
         int pos=m_string.find("&");
@@ -306,7 +311,7 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
     }
 
     //表示请求注册页面
-    else if(m_url[1]=='0')
+    else if(m_url.size()==2 && m_url[1]=='0')
     {
         m_real_file+="/register.html";
         m_file_type="text/html";
@@ -314,7 +319,7 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
     }
 
     //表示请求登陆页面
-    else if(m_url[1]=='1')
+    else if(m_url.size()==2 && m_url[1]=='1')
     {
         m_real_file+="/log.html";
         m_file_type="text/html";
@@ -322,7 +327,7 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
     }
 
     //图片页面
-    else if(m_url[1]=='5')
+    else if(m_url.size()==2 && m_url[1]=='5')
     {
         m_real_file+="/picture.html";
         m_file_type="text/html";
@@ -330,7 +335,7 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
     }
 
     //视频页面
-    else if(m_url[1]=='6')
+    else if(m_url.size()==2 && m_url[1]=='6')
     {
         m_real_file+="/video.html";
         m_file_type="text/html";
@@ -385,6 +390,7 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
 
 Http::HTTP_CODE Http::process_read()
 {
+    Log::getInstance()->write_log(DEBUG,"in Http::process_read");
     LINE_STATUS line_status = LINE_OK;
     HTTP_CODE ret = NO_REQUEST;
     string text;
@@ -434,53 +440,63 @@ Http::HTTP_CODE Http::process_read()
 
 bool Http::Read()//将数据从内核读缓冲区读取到用户的读缓冲区,返回false说明对方关闭连接或读取出错
 {
+    Log::getInstance()->write_log(DEBUG,"in Http::Read");
     return m_readbuffer.readFD(m_socket);
 }
 
 void Http::add_response(string text)//将text写入到用户写缓冲区中
 {
+    Log::getInstance()->write_log(DEBUG,"in Http::add_response");
     m_writebuffer.append(text.c_str(),text.size());
 }
 
 void Http::add_status_line(string status_code,string reason)//生成状态行，将其写入用户写缓冲区中
 {
+    Log::getInstance()->write_log(DEBUG,"in Http::add_status_line");
     add_response("HTTP/1.1 "+status_code+" "+reason+"\r\n");
 }
 
 void Http::add_content_length(size_t len)//添加内容长度
 {
+    Log::getInstance()->write_log(DEBUG,"in Http::add_content_length");
     add_response("Content-Length:"+to_string(len)+"\r\n");
 }
 
 void Http::add_content_type()//添加内容类型
 {
+    Log::getInstance()->write_log(DEBUG,"in Http::add_content_type");
     add_response("Content-Type:"+m_file_type+"\r\n");
 }
 
 void Http::add_connection()//添加连接状态
 {
+    Log::getInstance()->write_log(DEBUG,"in Http::add_connection");
     string s1=(m_linger==true?"keep-alive":"close");
     add_response("Connection:"+s1+"\r\n");
 }
 
 void Http::add_black_line()//添加\r\n
 {
+    Log::getInstance()->write_log(DEBUG,"in Http::add_black_line");
     add_response("\r\n");
 }
 
 void Http::add_headers(size_t len)//生成响应首部，将其写入用户写缓冲区中
 {
+    Log::getInstance()->write_log(DEBUG,"in Http::add_headers");
     add_connection();
     add_content_length(len);
     add_content_type();
 }
 void Http::add_content(string text)//添加内容
 {
+    Log::getInstance()->write_log(DEBUG,"in Http::add_content");
     add_response(text);
 }
 
 bool Http::process_write(HTTP_CODE ret)//生成响应报文，将其写入用户写缓冲区中
 {
+    Log::getInstance()->write_log(DEBUG,"in Http::process_write");
     switch(ret)
     {
     case BAD_REQUEST:
@@ -534,6 +550,7 @@ bool Http::process_write(HTTP_CODE ret)//生成响应报文，将其写入用户
 
 bool Http::Write()//将数据从用户写缓冲区、文件映射地址 写到内核写缓冲区中，返回false说明要关闭连接
 {
+    Log::getInstance()->write_log(DEBUG,"in Http::Write");
     int ret=m_writebuffer.writeFD(m_socket,m_iov,m_iov_cnt);
     if(ret==-1)//出错，应关闭连接
     {
@@ -549,14 +566,15 @@ bool Http::Write()//将数据从用户写缓冲区、文件映射地址 写到�
     {
         unmap();
         mod_fd_in_epoll(m_socket,EPOLLIN);//重置EPOLLONESHOT可读事件
-
         if(m_linger)
         {
             init();
             return true;
         }
         else
+        {
             return false;
+        }
     }
 
     return false;

@@ -3,6 +3,7 @@
 #include "Buffer.h"
 #include "MySQL_connection_pool.h"
 #include "Locker.h"
+#include "Log.h"
 #include<sys/stat.h>
 #include<sys/epoll.h>
 #include <sys/socket.h>
@@ -135,6 +136,7 @@ public:
         m_iov=NULL;
         m_iov_cnt=1;
         m_iov=(struct iovec*)malloc(m_iov_cnt*sizeof(struct iovec));
+
     }
     ~Http()
     {
@@ -180,6 +182,7 @@ public:
     bool Write();//将数据从用户写缓冲区、文件映射地址 写到内核写缓冲区中，返回false说明要关闭连接
     void process()
     {
+        Log::getInstance()->write_log(DEBUG,"in Http::process");
         HTTP_CODE ret=process_read();//解析报文
         if(ret==NO_REQUEST)
             mod_fd_in_epoll(m_socket,EPOLLIN);//重置EPOLLONESHOT

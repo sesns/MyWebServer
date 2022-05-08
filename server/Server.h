@@ -8,7 +8,7 @@
 #include "Http.h"
 const int MAX_FD=65536;//最大文件描述符数
 const int MAX_EPOLL_EVENTS=10000;//最大事件数
-const int TIME_SLOT=5;//最小超时单位
+const int TIME_SLOT=30;//最小超时单位
 extern int errno;
 
 class Server
