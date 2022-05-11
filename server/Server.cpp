@@ -32,7 +32,7 @@ void Server::mysqlinit(size_t mysql_con_num,string user,string pawd,string dbnam
 void Server::threadinit(int thread_num)
     {
         m_thread_pool=Threadpool<Http*>::getInstance();
-        m_thread_pool->init(thread_num,10000);
+        m_thread_pool->init(thread_num,100000);
     }
 
 void Server::loginit(bool close_log,bool is_async)
@@ -41,9 +41,14 @@ void Server::loginit(bool close_log,bool is_async)
         {
             m_log=Log::getInstance();
             if(is_async)//异步日志
-                m_log->init("/home/moocos/webserver_logfiles","webserverLog",1000,800000,2000);
-            else
-                m_log->init("/home/moocos/webserver_logfiles","webserverLog",0,800000,2000);
+                m_log->init(false,"/home/moocos/webserver_logfiles","webserverLog",100000,800000,2000);
+            else//同步日志
+                m_log->init(false,"/home/moocos/webserver_logfiles","webserverLog",0,800000,2000);
+        }
+        else//关闭日志系统
+        {
+            m_log=Log::getInstance();
+            m_log->init(true,NULL,NULL,0,0,0);
         }
     }
 
@@ -61,7 +66,6 @@ void Server::timerinit(int epoll_fd)
         m_sigframe->setsig(SIGALRM,sig_handler);
         m_sigframe->setsig(SIGTERM,sig_handler);
 
-        m_client_timer=new client_timer[MAX_FD];
     }
 
 void Server::eventlisten()//创建监听socket、创建epoll
@@ -120,12 +124,11 @@ void Server::dealwith_conn()
             }
 
             //http类对象初始化
-            m_users[connfd].init(connfd,client_address);
-            //生成定时器
+                //生成定时器
             time_t cur = time(NULL);
             Timer* t=m_sigframe->insert(cur+3*TIME_SLOT,&m_users[connfd]);
-            m_client_timer[connfd].m_sockfd=connfd;
-            m_client_timer[connfd].m_timer=t;
+            m_users[connfd].init(connfd,client_address,t);
+
         }
 
         return;
@@ -134,7 +137,7 @@ void Server::dealwith_conn()
 
 void Server::enentloop()
     {
-        bool timeout=false;
+
         bool stop_server=false;//如果有信号SIGTERM，就可以将其置为true以关闭服务器
         m_sigframe->start_tick();
         while(!stop_server)
@@ -153,22 +156,19 @@ void Server::enentloop()
 
                 if(sockfd==m_listenfd)//处理新到来的连接（ET模式）
                 {
-                    Log::getInstance()->write_log(DEBUG,"in evenloop,new conn");
+                    //Log::getInstance()->write_log(DEBUG,"in evenloop,new conn");
                     dealwith_conn();
                 }
                 else if(m_events[i].events & (EPOLLHUP | EPOLLERR | EPOLLRDHUP))//关闭连接
                 {
-                    Log::getInstance()->write_log(DEBUG,"in evenloop,HUP OR ERR");
+                    //Log::getInstance()->write_log(DEBUG,"in evenloop,HUP OR ERR");
 
                     m_users[sockfd].close_conn();
-                    Timer* t=m_client_timer[sockfd].m_timer;
-                    m_sigframe->remove(t);
                     Log::getInstance()->write_log(INFO,"client close connection");
 
                 }
                 else if(sockfd==m_read_pipfd && (m_events[i].events & EPOLLIN))//信号事件
                 {
-                    Log::getInstance()->write_log(DEBUG,"in evenloop,sig");
                     char signals[1024];
                     int ret=recv(m_read_pipfd,signals,sizeof(signals),0);
                     if(ret==-1)
@@ -184,8 +184,8 @@ void Server::enentloop()
                             Threadpool<Http*>::getInstance()->stop_threads();//停止线程池线程的循环
                             break;
                         case SIGALRM:
-                            timeout=true;
                             Log::getInstance()->write_log(INFO,"receive SIGALRM");
+                            m_sigframe->tick();
                             break;
                         }
                     }
@@ -193,62 +193,15 @@ void Server::enentloop()
                 //处理客户连接上的数据
                 else if(m_events[i].events & EPOLLIN)//可读事件
                 {
-                    Log::getInstance()->write_log(DEBUG,"in evenloop,read");
-                    bool ret=m_users[sockfd].Read();
-                    if(ret==false)//关闭连接
-                    {
-                        m_users[sockfd].close_conn();
-                        Timer* t=m_client_timer[sockfd].m_timer;
-                        m_sigframe->remove(t);
-
-                        Log::getInstance()->write_log(INFO,"server close connection");
-                    }
-                    else
-                    {
-                        //将任务加入阻塞队列
-                        if(m_thread_pool->append(&m_users[sockfd])==false)
-                        {
-                            m_users[sockfd].close_conn();
-                        }
-
-                        //调整定时器
-                        Timer* t=m_client_timer[sockfd].m_timer;
-                        time_t cur=time(NULL);
-                        t->m_expected_time=cur+3*TIME_SLOT;
-                        m_sigframe->adjust(t);
-                    }
-
-
+                    m_users[sockfd].task_type=1;
+                    Threadpool<Http*>::getInstance()->append(&m_users[sockfd]);
                 }
                 else if(m_events[i].events & EPOLLOUT)//可写事件
                 {
-                    Log::getInstance()->write_log(DEBUG,"in evenloop,write");
-                    bool ret=m_users[sockfd].Write();
-                    if(ret==false)//关闭连接
-                    {
-                        m_users[sockfd].close_conn();
-                        Timer* t=m_client_timer[sockfd].m_timer;
-                        m_sigframe->remove(t);
-
-                        Log::getInstance()->write_log(INFO,"server close connection");
-                    }
-                    else
-                    {
-                        //调整定时器
-                        Timer* t=m_client_timer[sockfd].m_timer;
-                        time_t cur=time(NULL);
-                        t->m_expected_time=cur+3*TIME_SLOT;
-                        m_sigframe->adjust(t);
-                    }
-
+                    m_users[sockfd].task_type=2;
+                    Threadpool<Http*>::getInstance()->append(&m_users[sockfd]);
                 }
 
-                if(timeout)//将超时事件延后到此处，是因为处理客户连接的数据更加重要
-                {
-                    Log::getInstance()->write_log(DEBUG,"in evenloop,process timeout");
-                    m_sigframe->tick();
-                    timeout=false;
-                }
             }
         }
     }

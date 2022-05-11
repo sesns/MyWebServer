@@ -19,7 +19,7 @@ MySQL_connection_pool* Http::m_conn_pool=NULL;
 
 void Http::mysqlInit_userAndpawd()//将数据库的帐号密码加载到username_to_password
 {
-    Log::getInstance()->write_log(DEBUG,"in Http::mysqlInit_userAndpawd");
+    //Log::getInstance()->write_log(DEBUG,"in Http::mysqlInit_userAndpawd");
     if(!m_conn_pool)
         return;
     MYSQL* conn=NULL;
@@ -53,7 +53,7 @@ void Http::mysqlInit_userAndpawd()//将数据库的帐号密码加载到username
 }
 Http::LINE_STATUS Http::parse_line()//从状态机解析缓冲区中的一行
 {
-    Log::getInstance()->write_log(DEBUG,"in Http::parse_line");
+    //Log::getInstance()->write_log(DEBUG,"in Http::parse_line");
     char cur=' ';
     bool flag;
     cur=m_readbuffer.read_only(&flag);//flag为true时说明读取成功
@@ -102,7 +102,7 @@ Http::LINE_STATUS Http::parse_line()//从状态机解析缓冲区中的一行
 
 Http::HTTP_CODE Http::parse_request_line(const string& text)//解析请求行
 {
-    Log::getInstance()->write_log(DEBUG,"in Http::parse_request_line");
+    //Log::getInstance()->write_log(DEBUG,"in Http::parse_request_line");
     //找到第一个空格的位置
     int first_space_pos=text.find(" ");
     if(first_space_pos==-1)
@@ -165,7 +165,7 @@ Http::HTTP_CODE Http::parse_request_line(const string& text)//解析请求行
 
 Http::HTTP_CODE Http::parse_header(const string& text)//解析请求首部
 {
-    Log::getInstance()->write_log(DEBUG,"in Http::parse_header");
+    //Log::getInstance()->write_log(DEBUG,"in Http::parse_header");
     //判断是空行还是请求首部
     //如果text=='\r\n'并且报文为GET方法，直接返回GET_REQUEST
     //如果text=='\r\n'并且报文为POST方法,状态转移到CHECK_CONTENT
@@ -263,14 +263,14 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
                     m_real_file+="/log.html";
                     m_file_type="text/html";
 
-                    Log::getInstance()->write_log(INFO,"in Http::do_request,register success");
+                    //Log::getInstance()->write_log(INFO,"in Http::do_request,register success");
                 }
                 else//插入失败,跳转到注册失败的页面
                 {
                     m_real_file+="/registerError.html";
                     m_file_type="text/html";
 
-                    Log::getInstance()->write_log(INFO,"in Http::do_request,register error");
+                    //Log::getInstance()->write_log(INFO,"in Http::do_request,register error");
                 }
 
             }
@@ -279,24 +279,25 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
                 m_real_file+="/registerError.html";
                 m_file_type="text/html";
 
-                Log::getInstance()->write_log(INFO,"in Http::do_request,register error");
+                //Log::getInstance()->write_log(INFO,"in Http::do_request,register error");
             }
         }
         else if(m_url[1]=='2')//2,登陆校验
         {
             if(username_to_password.find(username)!=username_to_password.end() && username_to_password[username]==password)
             {
+                cgi_succ=true;
                 m_real_file+="/welcome.html";
                 m_file_type="text/html";
 
-                Log::getInstance()->write_log(INFO,"in Http::do_request,log success");
+                //Log::getInstance()->write_log(INFO,"in Http::do_request,log success");
             }
             else
             {
                 m_real_file+="/logError.html";
                 m_file_type="text/html";
 
-                Log::getInstance()->write_log(INFO,"in Http::do_request,log error");
+                //Log::getInstance()->write_log(INFO,"in Http::do_request,log error");
             }
         }
     }
@@ -307,7 +308,7 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
     {
         m_real_file+="/judge.html";
         m_file_type="text/html";
-        Log::getInstance()->write_log(DEBUG,"in Http::do_request,request file is /judge.html");
+        //Log::getInstance()->write_log(DEBUG,"in Http::do_request,request file is /judge.html");
     }
 
     //表示请求注册页面
@@ -315,7 +316,7 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
     {
         m_real_file+="/register.html";
         m_file_type="text/html";
-        Log::getInstance()->write_log(DEBUG,"in Http::do_request,request file is /register.html");
+        //Log::getInstance()->write_log(DEBUG,"in Http::do_request,request file is /register.html");
     }
 
     //表示请求登陆页面
@@ -323,7 +324,7 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
     {
         m_real_file+="/log.html";
         m_file_type="text/html";
-        Log::getInstance()->write_log(DEBUG,"in Http::do_request,request file is /log.html");
+        //Log::getInstance()->write_log(DEBUG,"in Http::do_request,request file is /log.html");
     }
 
     //图片页面
@@ -331,7 +332,7 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
     {
         m_real_file+="/picture.html";
         m_file_type="text/html";
-        Log::getInstance()->write_log(DEBUG,"in Http::do_request,request file is /picture.html");
+       // Log::getInstance()->write_log(DEBUG,"in Http::do_request,request file is /picture.html");
     }
 
     //视频页面
@@ -339,41 +340,48 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
     {
         m_real_file+="/video.html";
         m_file_type="text/html";
-        Log::getInstance()->write_log(DEBUG,"in Http::do_request,request file is /video.html");
+        //Log::getInstance()->write_log(DEBUG,"in Http::do_request,request file is /video.html");
     }
-    //否则就发送url实际请求的文件
-    else
+    //登陆校验成功就发送url实际请求的文件
+    else if(cgi_succ)
     {
         m_real_file+=m_url;
         m_file_type="text/html";
-        string file_type=m_url.substr(m_url.size()-3,3);
+        if(m_url.size()>=3)
+        {
+            string file_type=m_url.substr(m_url.size()-3,3);
+            if(file_type=="jpg")
+                m_file_type="image/jpeg";
+            else if(file_type=="mp4")
+                m_file_type="video/mpeg4";
+        }
 
-        if(file_type=="jpg")
-            m_file_type="image/jpeg";
-        else if(file_type=="mp4")
-            m_file_type="video/mpeg4";
-
-        Log::getInstance()->write_log(DEBUG,"in Http::do_request,request file is %s",m_real_file.c_str());
+        //Log::getInstance()->write_log(DEBUG,"in Http::do_request,request file is %s",m_real_file.c_str());
+    }
+    else //否则返回主页面
+    {
+        m_real_file+="/judge.html";
+        m_file_type="text/html";
     }
 
     //检查是否存在这样的文件
     if(stat(m_real_file.c_str(),&m_file_stat)<0)
     {
-        Log::getInstance()->write_log(INFO,"in Http::do_request,no_resource");
+        //Log::getInstance()->write_log(INFO,"in Http::do_request,no_resource");
         return NO_RESOURCE;
     }
 
     //检查是否有权限请求该文件
     if(!(m_file_stat.st_mode & S_IROTH))
     {
-        Log::getInstance()->write_log(INFO,"in Http::do_request,forbidden_request");
+        //Log::getInstance()->write_log(INFO,"in Http::do_request,forbidden_request");
         return FORBIDDEN_REQUEST;
     }
 
     //检查文件类型，如果为目录则返回语法错误
     if(S_ISDIR(m_file_stat.st_mode))
     {
-        Log::getInstance()->write_log(INFO,"in Http::do_request,can't request dir");
+        //Log::getInstance()->write_log(INFO,"in Http::do_request,can't request dir");
         return BAD_REQUEST;
     }
 
@@ -440,63 +448,63 @@ Http::HTTP_CODE Http::process_read()
 
 bool Http::Read()//将数据从内核读缓冲区读取到用户的读缓冲区,返回false说明对方关闭连接或读取出错
 {
-    Log::getInstance()->write_log(DEBUG,"in Http::Read");
+    //Log::getInstance()->write_log(DEBUG,"in Http::Read");
     return m_readbuffer.readFD(m_socket);
 }
 
 void Http::add_response(string text)//将text写入到用户写缓冲区中
 {
-    Log::getInstance()->write_log(DEBUG,"in Http::add_response");
+    //Log::getInstance()->write_log(DEBUG,"in Http::add_response");
     m_writebuffer.append(text.c_str(),text.size());
 }
 
 void Http::add_status_line(string status_code,string reason)//生成状态行，将其写入用户写缓冲区中
 {
-    Log::getInstance()->write_log(DEBUG,"in Http::add_status_line");
+    //Log::getInstance()->write_log(DEBUG,"in Http::add_status_line");
     add_response("HTTP/1.1 "+status_code+" "+reason+"\r\n");
 }
 
 void Http::add_content_length(size_t len)//添加内容长度
 {
-    Log::getInstance()->write_log(DEBUG,"in Http::add_content_length");
+    //Log::getInstance()->write_log(DEBUG,"in Http::add_content_length");
     add_response("Content-Length:"+to_string(len)+"\r\n");
 }
 
 void Http::add_content_type()//添加内容类型
 {
-    Log::getInstance()->write_log(DEBUG,"in Http::add_content_type");
+    //Log::getInstance()->write_log(DEBUG,"in Http::add_content_type");
     add_response("Content-Type:"+m_file_type+"\r\n");
 }
 
 void Http::add_connection()//添加连接状态
 {
-    Log::getInstance()->write_log(DEBUG,"in Http::add_connection");
+    //Log::getInstance()->write_log(DEBUG,"in Http::add_connection");
     string s1=(m_linger==true?"keep-alive":"close");
     add_response("Connection:"+s1+"\r\n");
 }
 
 void Http::add_black_line()//添加\r\n
 {
-    Log::getInstance()->write_log(DEBUG,"in Http::add_black_line");
+    //Log::getInstance()->write_log(DEBUG,"in Http::add_black_line");
     add_response("\r\n");
 }
 
 void Http::add_headers(size_t len)//生成响应首部，将其写入用户写缓冲区中
 {
-    Log::getInstance()->write_log(DEBUG,"in Http::add_headers");
+    //Log::getInstance()->write_log(DEBUG,"in Http::add_headers");
     add_connection();
     add_content_length(len);
     add_content_type();
 }
 void Http::add_content(string text)//添加内容
 {
-    Log::getInstance()->write_log(DEBUG,"in Http::add_content");
+    //Log::getInstance()->write_log(DEBUG,"in Http::add_content");
     add_response(text);
 }
 
 bool Http::process_write(HTTP_CODE ret)//生成响应报文，将其写入用户写缓冲区中
 {
-    Log::getInstance()->write_log(DEBUG,"in Http::process_write");
+    //Log::getInstance()->write_log(DEBUG,"in Http::process_write");
     switch(ret)
     {
     case BAD_REQUEST:
@@ -550,7 +558,7 @@ bool Http::process_write(HTTP_CODE ret)//生成响应报文，将其写入用户
 
 bool Http::Write()//将数据从用户写缓冲区、文件映射地址 写到内核写缓冲区中，返回false说明要关闭连接
 {
-    Log::getInstance()->write_log(DEBUG,"in Http::Write");
+    //Log::getInstance()->write_log(DEBUG,"in Http::Write");
     int ret=m_writebuffer.writeFD(m_socket,m_iov,m_iov_cnt);
     if(ret==-1)//出错，应关闭连接
     {

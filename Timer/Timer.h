@@ -5,21 +5,18 @@
 #include <sys/socket.h>
 #include <assert.h>
 #include<sys/epoll.h>
-#include<Http.h>
 #include<signal.h>
-class Timer;
-class client_timer
-{
-public:
-    int m_sockfd;
-    Timer* m_timer;
-};
+#include <unistd.h>
+#include <fcntl.h>
+
+const int TIME_SLOT=5;//最小超时单位
+
 class Timer
 {
 public:
-    Timer(time_t expected_time,Http* user):m_expected_time(expected_time),m_user(user){}
+    Timer(time_t expected_time,void* user):m_expected_time(expected_time),m_user(user){}
     void timeout_event();
-    Http* m_user;
+    void* m_user;
     time_t m_expected_time;
     Timer* next;
     Timer* pre;
@@ -61,7 +58,7 @@ public:
 
     }
 
-    Timer* Insert(time_t t,Http* user);//动态分配定时器并插入到合适位置
+    Timer* Insert(time_t t,void* user);//动态分配定时器并插入到合适位置
     void Adjust(Timer* t);//Timer的超时时间被更改，因此需要调整定时器的位置
     void ProcessTimeout();//处理超时的定时器，执行其对应超时事件,从List移除并释放资源
     void remove(Timer* t);//移除定时器(释放资源)
@@ -152,7 +149,7 @@ public:
 
 
 
-    Timer* insert(time_t t,Http* user)//动态分配定时器并插入到合适位置
+    Timer* insert(time_t t,void* user)//动态分配定时器并插入到合适位置
     {
         return m_timerlist.Insert(t,user);
     }

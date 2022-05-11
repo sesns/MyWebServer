@@ -2,10 +2,13 @@
 #include <time.h>
 #include "Timer.h"
 #include "Log.h"
+#include "Http.h"
+
 
 void Timer::timeout_event()
 {
-    m_user->close_conn();//关闭连接
+    Http* m_user_p=(Http*)m_user;
+    m_user_p->close_conn();//关闭连接
     Log::getInstance()->write_log(INFO,"concection timeout so the server close connection");
 }
 
@@ -48,9 +51,10 @@ void TimerList::remove(Timer* t)
 }
 
 
-Timer* TimerList::Insert(time_t t,Http* user)
+Timer* TimerList::Insert(time_t t,void* user)
 {
-    Timer* cur=new Timer(t,user);
+    Http* user_p=(Http*)user;
+    Timer* cur=new Timer(t,user_p);
     Insert(cur);
     return cur;
 }

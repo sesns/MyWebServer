@@ -8,7 +8,6 @@
 #include "Http.h"
 const int MAX_FD=65536;//最大文件描述符数
 const int MAX_EPOLL_EVENTS=10000;//最大事件数
-const int TIME_SLOT=30;//最小超时单位
 extern int errno;
 
 class Server
@@ -33,7 +32,6 @@ private:
 
     //定时器相关
     SigFrame* m_sigframe;//定时器框架
-    client_timer* m_client_timer;//定时器与用户信息
     int m_read_pipfd;//管道读端
 
 private:
@@ -49,7 +47,6 @@ public:
     {
         m_users=NULL;
         m_events=NULL;
-        m_client_timer=NULL;
         m_port=port;
 
         loginit(close_log,is_async);
@@ -72,8 +69,6 @@ public:
             delete[] m_users;
         if(m_events)
             delete[] m_events;
-        if(m_client_timer)
-            delete[] m_client_timer;
         close(m_listenfd);
         close(m_epollfd);
 

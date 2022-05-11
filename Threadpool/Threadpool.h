@@ -37,7 +37,7 @@ public:
     {
         stop=true;
     }
-    void init(int thread_num,int max_queue_num=10000)
+    void init(int thread_num,int max_queue_num=100000)
     {
         m_thread_num=thread_num;
         m_queue_num=max_queue_num;
@@ -113,7 +113,7 @@ void Threadpool<T>::work()
             loc.unlock();
 
             pthread_t cur_id=pthread_self();//获取当前线程id
-            Log::getInstance()->write_log(INFO,"pthread:%d begin to execute process()",cur_id);
+            //Log::getInstance()->write_log(INFO,"pthread:%d begin to execute process()",cur_id);
             cur_task->process();//执行任务
         }
 }

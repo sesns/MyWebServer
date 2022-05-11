@@ -65,6 +65,7 @@ public:
     Log& operator=(const Log& l)=delete;
     Log& operator=(Log&& l)=delete;
 private:
+    bool m_close_log;//关闭log
     bool m_is_asy;//是否为异步
     bool close_thread;//是否停止异步写线程
     BlockQueue* m_bqueue;//阻塞队列
@@ -85,7 +86,7 @@ public:
         static Log m_log_instance;
         return &m_log_instance;
     }
-    bool init(const char* dir,const char* filename,size_t max_queue_size=0,size_t max_lines=5000000,size_t buffer_size=2000);
+    bool init(bool close_log,const char* dir,const char* filename,size_t max_queue_size=0,size_t max_lines=5000000,size_t buffer_size=2000);
 
 
     //将日志信息格式化输出（同步则直接输出到日志文件，异步则将其加入阻塞队列）
