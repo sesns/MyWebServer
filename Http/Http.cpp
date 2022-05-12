@@ -142,7 +142,7 @@ Http::HTTP_CODE Http::parse_request_line(const string& text)//解析请求行
     string url=text.substr(first_space_pos+1,second_space_pos-first_space_pos-1);
     string version=text.substr(second_space_pos+1,8);
 
-    if(version=="HTTP/1.1")//仅支持HTTP1.1
+    if(version=="HTTP/1.1" || version=="HTTP/1.0")//仅支持HTTP1.1和1.0
         m_version=version;
     else
     {

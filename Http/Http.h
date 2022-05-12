@@ -169,7 +169,6 @@ public:
         m_user_count-=1;
         remove_fd_from_epoll(m_socket);//从epoll空间删除fd
         close(m_socket);//关闭连接
-        SigFrame::getInstace()->remove(m_timer);//删除定时器
         Log::getInstance()->write_log(INFO,"server close connection");
     }
     void init()//维持同一个连接下的初始化
@@ -198,6 +197,7 @@ public:
             if(ret==false)//关闭连接
             {
                 close_conn();
+                SigFrame::getInstace()->remove(m_timer);//删除定时器
                 return;
             }
             else
@@ -230,6 +230,7 @@ public:
             if(ret==false)//关闭连接
             {
                 close_conn();
+                SigFrame::getInstace()->remove(m_timer);//删除定时器
                 return;
             }
             else
