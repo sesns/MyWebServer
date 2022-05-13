@@ -12,10 +12,55 @@
 #include "Log.h"
 using namespace std;
 
+locker m_loc;//保护数据库插入、保护username_to_password
+locker m_loc2;//保护user_count;
 unordered_map<string,string> username_to_password;//web页面用户注册的帐号密码
 int Http::m_user_count=0;
 int Http::m_epoll_fd=-1;
 MySQL_connection_pool* Http::m_conn_pool=NULL;
+
+void Http::init()//维持同一个连接下的初始化
+{
+        m_check_status=CHECK_REQUESTLINE;
+        m_content_length=0;
+        m_string="";
+        m_method="GET";
+        m_url="";
+        m_version="HTTP/1.1";
+        m_linger=false;
+        m_host="";
+        m_file_type="text/html";
+        m_real_file="";
+        m_file_addres=0;
+
+}
+void Http::init(int sockfd, const sockaddr_in &addr,Timer* t)
+{
+        m_loc2.lock();
+        m_user_count+=1;
+        m_loc2.unlock();
+
+        m_timer=NULL;
+        m_timer=t;
+        m_socket=sockfd;
+        m_client_address=addr;
+        cgi_succ=false;
+        add_fd_to_epoll(m_socket);
+        m_readbuffer.init();
+        m_writebuffer.init();
+        init();
+}
+
+void Http::close_conn()//关闭连接
+{
+        m_loc2.lock();
+        m_user_count-=1;
+        m_loc2.unlock();
+        remove_fd_from_epoll(m_socket);//从epoll空间删除fd
+        close(m_socket);//关闭连接
+
+        Log::getInstance()->write_log(INFO,"server close connection");
+}
 
 void Http::mysqlInit_userAndpawd()//将数据库的帐号密码加载到username_to_password
 {
@@ -43,7 +88,9 @@ void Http::mysqlInit_userAndpawd()//将数据库的帐号密码加载到username
         MYSQL_ROW sql_row;
         while(sql_row=mysql_fetch_row(res))
         {
+            m_loc.lock();
             username_to_password[sql_row[0]]=sql_row[1];
+            m_loc.unlock();
         }
     }
 
@@ -182,7 +229,7 @@ Http::HTTP_CODE Http::parse_header(const string& text)//解析请求首部
         }
         else
         {
-            Log::getInstance()->write_log(WARN,"in Http::parse_header,don't support other method");
+            //Log::getInstance()->write_log(WARN,"in Http::parse_header,don't support other method");
             return BAD_REQUEST;
         }
     }
@@ -194,7 +241,7 @@ Http::HTTP_CODE Http::parse_header(const string& text)//解析请求首部
             m_linger=false;
         else
         {
-            Log::getInstance()->write_log(WARN,"in Http::parse_header,the header connection has syntax error");
+            //Log::getInstance()->write_log(WARN,"in Http::parse_header,the header connection has syntax error");
             return BAD_REQUEST;
         }
     }
@@ -204,7 +251,7 @@ Http::HTTP_CODE Http::parse_header(const string& text)//解析请求首部
         for(int i=0;i<len.size();i++)
             if(!isdigit(len[i]))
             {
-                Log::getInstance()->write_log(WARN,"in Http::parse_header,the header contentlength has syntax error");
+                //Log::getInstance()->write_log(WARN,"in Http::parse_header,the header contentlength has syntax error");
                 return BAD_REQUEST;
             }
         m_content_length=stoi(len);
@@ -215,7 +262,7 @@ Http::HTTP_CODE Http::parse_header(const string& text)//解析请求首部
     }
     else
     {
-        Log::getInstance()->write_log(WARN,"in Http::parse_header,unknown header");
+        //Log::getInstance()->write_log(WARN,"in Http::parse_header,unknown header");
     }
 
     return NO_REQUEST;
@@ -226,6 +273,7 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
     Log::getInstance()->write_log(DEBUG,"in Http::do_request");
     m_real_file=m_doc_root;
     //进行登陆校验和注册校验
+
     if(m_url.size()==2 && m_method=="POST" && (m_url[1]=='2' || m_url[1]=='3'))
     {
         //从请求报文的报文体中将帐号密码提取出来,帐号密码格式为 user=123&password=123
@@ -324,7 +372,7 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
     {
         m_real_file+="/log.html";
         m_file_type="text/html";
-        //Log::getInstance()->write_log(DEBUG,"in Http::do_request,request file is /log.html");
+        Log::getInstance()->write_log(DEBUG,"in Http::do_request,request file is /log.html");
     }
 
     //图片页面
@@ -388,7 +436,7 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
     //以只读的方式打开文件
     int fd=open(m_real_file.c_str(),O_RDONLY);
 
-    //将文件映射到虚拟内存中
+    //将文件映射到虚拟内存中,对此区域作的任何修改都不会写回原来的文件内容
     m_file_addres=(char*)mmap(0,m_file_stat.st_size,PROT_READ,MAP_PRIVATE,fd,0);
 
     close(fd);
@@ -587,3 +635,61 @@ bool Http::Write()//将数据从用户写缓冲区、文件映射地址 写到�
 
     return false;
 }
+
+void Http::process()//
+    {
+        if(task_type==1)//从socket读取数据,报文解析,报文撰写
+        {
+            bool ret=Read();
+            if(ret==false)//关闭连接
+            {
+                Timer* t=m_timer;
+                t->m_expected_time=0;
+                SigFrame::getInstace()->adjust(t);//将其调整为过期定时器
+                return;
+            }
+            else
+            {
+                //调整定时器
+                Timer* t=m_timer;
+                time_t cur=time(NULL);
+                t->m_expected_time=cur+3*TIME_SLOT;
+                SigFrame::getInstace()->adjust(t);
+
+
+                //解析报文
+                HTTP_CODE temp_ret=process_read();
+                if(temp_ret==NO_REQUEST)
+                {
+                    mod_fd_in_epoll(m_socket,EPOLLIN);//重置EPOLLONESHOT
+                    return;
+                }
+
+                //生成响应报文，将其写入用户写缓冲区中
+                process_write(temp_ret);
+
+                mod_fd_in_epoll(m_socket,EPOLLOUT);//重置EPOLLONESHOT
+            }
+        }
+
+        else if(task_type==2)//向socket发送数据
+        {
+            bool ret=Write();
+            if(ret==false)//关闭连接
+            {
+                Timer* t=m_timer;
+                t->m_expected_time=0;
+                SigFrame::getInstace()->adjust(t);//将其调整为过期定时器
+                return;
+            }
+            else
+            {
+                //调整定时器
+                Timer* t=m_timer;
+                time_t cur=time(NULL);
+                t->m_expected_time=cur+3*TIME_SLOT;
+                SigFrame::getInstace()->adjust(t);
+            }
+        }
+
+    }

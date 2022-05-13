@@ -1,5 +1,6 @@
 #ifndef TIMER_H_INCLUDED
 #define TIMER_H_INCLUDED
+#include "Locker.h"
 #include <time.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -27,9 +28,7 @@ class TimerList//升序定时器列表,并且进行定时器资源的分配与�
 private:
     Timer* head;
     Timer* tail;
-private:
-    void Insert(Timer* t);//插入定时器(不分配资源)
-    void Remove(Timer* t);//移除定时器(不释放资源)
+    locker loc;//定时器列表为共享资源
 public:
     TimerList()
     {
@@ -44,10 +43,12 @@ public:
     }
     ~TimerList()
     {
-        while(head->next && head->next!=tail)//删除所有节点（除了头尾节点）
+        Timer* p=head->next;
+        while(p!=tail)//删除所有节点（除了头尾节点）
         {
-            Timer* temp=head->next;
-            Remove(head->next);
+            Timer* temp=p;
+            p=p->next;
+
             delete temp;
         }
 
@@ -61,7 +62,6 @@ public:
     Timer* Insert(time_t t,void* user);//动态分配定时器并插入到合适位置
     void Adjust(Timer* t);//Timer的超时时间被更改，因此需要调整定时器的位置
     void ProcessTimeout();//处理超时的定时器，执行其对应超时事件,从List移除并释放资源
-    void remove(Timer* t);//移除定时器(释放资源)
 };
 
 
@@ -156,10 +156,6 @@ public:
     void adjust(Timer* t)//Timer的超时时间被更改，因此需要调整定时器的位置
     {
         m_timerlist.Adjust(t);
-    }
-    void remove(Timer* t)
-    {
-        m_timerlist.remove(t);
     }
 };
 #endif // TIMER_H_INCLUDED

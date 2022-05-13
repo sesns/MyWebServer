@@ -12,10 +12,53 @@ void Timer::timeout_event()
     Log::getInstance()->write_log(INFO,"concection timeout so the server close connection");
 }
 
-void TimerList::Insert(Timer* t)
+Timer* TimerList::Insert(time_t cur_time,void* user)
+{
+    loc.lock();
+
+    Http* user_p=(Http*)user;
+    Timer* t=new Timer(cur_time,user_p);
+
+    Timer* cur=t;
+    Timer* p=head->next;
+    while(p!=tail && ((p->m_expected_time)<(t->m_expected_time)))
+        p=p->next;
+
+    Timer* Pre_node=p->pre;
+    Pre_node->next=cur;
+    cur->next=p;
+    p->pre=cur;
+    cur->pre=Pre_node;
+
+    loc.unlock();
+
+    return t;
+}
+
+void TimerList::Adjust(Timer* t)
 {
     if(!t)
         return;
+
+    if(t->next==tail)//该定时器超时时间最大，不用调整位置
+    {
+        return;
+    }
+    if(t->next->m_expected_time>=t->m_expected_time)//该定时器超时时间调整后仍<=下一个定时器超时时间，不用调整位置
+    {
+        return;
+    }
+
+    loc.lock();
+
+    //从链表中删除
+    Timer* p_node=t->pre;
+    Timer* n_node=t->next;
+
+    p_node->next=n_node;
+    n_node->pre=p_node;
+
+    //加入链表
     Timer* cur=t;
     Timer* p=head->next;
     while(p!=tail && p->m_expected_time<t->m_expected_time)
@@ -27,62 +70,33 @@ void TimerList::Insert(Timer* t)
     p->pre=cur;
     cur->pre=Pre_node;
 
-}
-
-
-void TimerList::Remove(Timer* t)
-{
-    if(!t)
-        return;
-    Timer* Pre_node=t->pre;
-    Timer* Next_node=t->next;
-
-    Pre_node->next=Next_node;
-    Next_node->pre=Pre_node;
-}
-
-void TimerList::remove(Timer* t)
-{
-    if(!t)
-        return;
-
-    Remove(t);
-    delete t;
-}
-
-
-Timer* TimerList::Insert(time_t t,void* user)
-{
-    Http* user_p=(Http*)user;
-    Timer* cur=new Timer(t,user_p);
-    Insert(cur);
-    return cur;
-}
-
-void TimerList::Adjust(Timer* t)
-{
-    Remove(t);
-    if(t->next==tail)//该定时器超时时间最大，不用调整位置
-        return;
-    if(t->next->m_expected_time>=t->m_expected_time)//该定时器超时时间调整后仍<=下一个定时器超时时间，不用调整位置
-        return;
-    Insert(t);
+    loc.unlock();
 }
 
 
 void TimerList::ProcessTimeout()
 {
+    loc.lock();
+
     Timer* cur=head->next;
     time_t cur_time=time(NULL);
-    while(cur!=tail && cur->m_expected_time<cur_time)
+    while(cur!=nullptr && cur!=tail && cur->m_expected_time<cur_time)
     {
         Timer* temp=cur;
         cur=cur->next;
 
         temp->timeout_event();//执行超时对应的动作
-        Remove(temp);
+
+        //删除定时器
+        Timer* Pre_node=temp->pre;
+        Timer* Next_node=temp->next;
+        Pre_node->next=Next_node;
+        Next_node->pre=Pre_node;
+
         delete temp;
 
     }
+
+    loc.unlock();
 
 }

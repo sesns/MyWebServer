@@ -75,7 +75,6 @@ private:
     struct stat m_file_stat;//文件状态
     struct iovec* m_iov;//用于发送响应报文的iovec,第一个iovec指向用户写缓冲区，第二个iovec指向要发送的文件
     int m_iov_cnt;//iovec数组元素个数
-    locker m_loc;
     bool cgi_succ;//登陆校验成功
 
 private:
@@ -150,100 +149,13 @@ public:
     }
 
     static void mysqlInit_userAndpawd();//将数据库的帐号密码加载到username_to_password
+    void init();//维持同一个连接下的初始化;
     //新连接的初始化
-    void init(int sockfd, const sockaddr_in &addr,Timer* t)
-    {
-        m_timer=NULL;
-        m_timer=t;
-        m_socket=sockfd;
-        m_client_address=addr;
-        m_user_count+=1;
-        cgi_succ=false;
-        add_fd_to_epoll(m_socket);
-        m_readbuffer.init();
-        m_writebuffer.init();
-        init();
-    }
-    void close_conn()//关闭连接
-    {
-        m_user_count-=1;
-        remove_fd_from_epoll(m_socket);//从epoll空间删除fd
-        close(m_socket);//关闭连接
-        Log::getInstance()->write_log(INFO,"server close connection");
-    }
-    void init()//维持同一个连接下的初始化
-    {
-        m_check_status=CHECK_REQUESTLINE;
-        m_content_length=0;
-        m_string="";
-        m_method="GET";
-        m_url="";
-        m_version="HTTP/1.1";
-        m_linger=false;
-        m_host="";
-        m_file_type="text/html";
-        m_real_file="";
-        m_file_addres=0;
-
-    }
-
+    void init(int sockfd, const sockaddr_in &addr,Timer* t);
+    void close_conn();//关闭连接
     bool Read();//将数据从内核读缓冲区读取到用户的读缓冲区,返回false说明对方关闭连接或读取出错
     bool Write();//将数据从用户写缓冲区、文件映射地址 写到内核写缓冲区中，返回false说明要关闭连接
-    void process()//
-    {
-        if(task_type==1)//从socket读取数据,报文解析,报文撰写
-        {
-            bool ret=Read();
-            if(ret==false)//关闭连接
-            {
-                close_conn();
-                SigFrame::getInstace()->remove(m_timer);//删除定时器
-                return;
-            }
-            else
-            {
-                //调整定时器
-                Timer* t=m_timer;
-                time_t cur=time(NULL);
-                t->m_expected_time=cur+3*TIME_SLOT;
-                SigFrame::getInstace()->adjust(t);
-
-
-                //解析报文
-                HTTP_CODE temp_ret=process_read();
-                if(temp_ret==NO_REQUEST)
-                {
-                    mod_fd_in_epoll(m_socket,EPOLLIN);//重置EPOLLONESHOT
-                    return;
-                }
-
-                //生成响应报文，将其写入用户写缓冲区中
-                process_write(temp_ret);
-
-                mod_fd_in_epoll(m_socket,EPOLLOUT);//重置EPOLLONESHOT
-            }
-        }
-
-        else if(task_type==2)//向socket发送数据
-        {
-            bool ret=Write();
-            if(ret==false)//关闭连接
-            {
-                close_conn();
-                SigFrame::getInstace()->remove(m_timer);//删除定时器
-                return;
-            }
-            else
-            {
-                //调整定时器
-                Timer* t=m_timer;
-                time_t cur=time(NULL);
-                t->m_expected_time=cur+3*TIME_SLOT;
-                SigFrame::getInstace()->adjust(t);
-            }
-        }
-
-    }
+    void process();
 
 };
 #endif // HTTP_H_INCLUDED

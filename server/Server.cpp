@@ -163,8 +163,9 @@ void Server::enentloop()
                 {
                     //Log::getInstance()->write_log(DEBUG,"in evenloop,HUP OR ERR");
 
-                    m_users[sockfd].close_conn();
-                    SigFrame::getInstace()->remove(m_users[sockfd].m_timer);//删除定时器
+                    Timer* t=m_users[sockfd].m_timer;
+                    t->m_expected_time=0;
+                    SigFrame::getInstace()->adjust(t);//将其调整为过期定时器
                     Log::getInstance()->write_log(INFO,"client close connection");
 
                 }
