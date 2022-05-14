@@ -8,12 +8,14 @@
 #include "Server.h"
 using namespace std;
 
+/*
 int global_pipfds[2];
 void sig_handler(int sig)//信号处理函数
 {
     char msg=(char)sig;
     send(global_pipfds[1],&msg,1,0);
 }
+*/
 
 void Server::httpinit()
     {
@@ -52,6 +54,7 @@ void Server::loginit(bool close_log,bool is_async)
         }
     }
 
+/*
 void Server::timerinit(int epoll_fd)
     {
         m_sigframe=SigFrame::getInstace();
@@ -67,6 +70,7 @@ void Server::timerinit(int epoll_fd)
         m_sigframe->setsig(SIGTERM,sig_handler);
 
     }
+*/
 
 void Server::eventlisten()//创建监听socket、创建epoll
     {
@@ -125,9 +129,7 @@ void Server::dealwith_conn()
 
             //http类对象初始化
                 //生成定时器
-            time_t cur = time(NULL);
-            Timer* t=m_sigframe->insert(cur+3*TIME_SLOT,&m_users[connfd]);
-            m_users[connfd].init(connfd,client_address,t);
+            m_users[connfd].init(connfd,client_address);
 
         }
 
@@ -139,7 +141,6 @@ void Server::enentloop()
     {
 
         bool stop_server=false;//如果有信号SIGTERM，就可以将其置为true以关闭服务器
-        m_sigframe->start_tick();
         while(!stop_server)
         {
             int num=epoll_wait(m_epollfd,m_events,MAX_EPOLL_EVENTS,-1);
@@ -163,12 +164,11 @@ void Server::enentloop()
                 {
                     //Log::getInstance()->write_log(DEBUG,"in evenloop,HUP OR ERR");
 
-                    Timer* t=m_users[sockfd].m_timer;
-                    t->m_expected_time=0;
-                    SigFrame::getInstace()->adjust(t);//将其调整为过期定时器
-                    Log::getInstance()->write_log(INFO,"client close connection");
+                    m_users[sockfd].close_conn();
+                    //Log::getInstance()->write_log(INFO,"client close connection");
 
                 }
+                /*
                 else if(sockfd==m_read_pipfd && (m_events[i].events & EPOLLIN))//信号事件
                 {
                     char signals[1024];
@@ -192,6 +192,7 @@ void Server::enentloop()
                         }
                     }
                 }
+                */
                 //处理客户连接上的数据
                 else if(m_events[i].events & EPOLLIN)//可读事件
                 {

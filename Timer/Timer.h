@@ -10,7 +10,8 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-const int TIME_SLOT=5;//最小超时单位
+/*
+const int TIME_SLOT=1;//最小超时单位
 
 class Timer
 {
@@ -158,4 +159,5 @@ public:
         m_timerlist.Adjust(t);
     }
 };
+*/
 #endif // TIMER_H_INCLUDED

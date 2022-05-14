@@ -4,6 +4,7 @@
 #include<errno.h>
 #include <assert.h>
 #include <string>
+#include <string.h>
 #include "Log.h"
 int extern errno;
 using namespace std;
@@ -107,7 +108,7 @@ bool Buffer::readFD(int sockfd)
         }
         else if(bytes_recv==0)//对方关闭连接
         {
-            Log::getInstance()->write_log(INFO,"in Buffer::readFD,client close connection");
+            //Log::getInstance()->write_log(INFO,"in Buffer::readFD,client close connection");
             return false;
         }
 
@@ -127,36 +128,19 @@ bool Buffer::readFD(int sockfd)
 
 //将数据从用户写缓冲区、文件映射地址 写到内核写缓冲区中，返回-1关闭连接，返回0数据因内核缓冲区满没有写完，返回1数据全部发送完毕
 //ET模式
-int Buffer::writeFD(int sockfd,struct iovec* iov,int iovcnt)
+int Buffer::writeFD(int sockfd)
 {
-    writev_cnt+=1;
-
-    if(writev_cnt==1)
-    {
-        iov[0].iov_base=getReadBegin();
-        iov[0].iov_len=readableBytes();
-        m_bytes_have_send=0;
-        len1=iov[0].iov_len;
-        len2=iov[1].iov_len;
-        start1=(char*)iov[0].iov_base;
-        start2=(char*)iov[1].iov_base;
-
-        if(iovcnt==1)
-            m_bytes_to_send=len1;
-        else
-            m_bytes_to_send=len1+len2;
-    }
-
     int ret;
     while(true)
     {
-        ret=writev(sockfd,iov,iovcnt);
+        ret=writev(sockfd,m_iov,m_iov_cnt);
         if(ret>0)
             m_bytes_have_send+=ret;
         else if(ret<0)
         {
-            if(errno==EAGAIN || errno==EWOULDBLOCK)
+            if(errno==EAGAIN || errno==EWOULDBLOCK )
                 return 0;
+            //printf("%s\n", strerror(errno));
             Log::getInstance()->write_log(ERRO,"in Buffer::writeFD,writev unknown error");
             return -1;
         }
@@ -165,19 +149,18 @@ int Buffer::writeFD(int sockfd,struct iovec* iov,int iovcnt)
         {
             if(m_bytes_have_send<len1)//第一块的数据没有发完
             {
-                iov[0].iov_base=start1+m_bytes_have_send;
-                iov[0].iov_len=len1-m_bytes_have_send;
+                m_iov[0].iov_base=start1+m_bytes_have_send;
+                m_iov[0].iov_len=len1-m_bytes_have_send;
             }
             else//第一块的数据已经发完
             {
-                iov[0].iov_len=0;
-                iov[1].iov_base=start2+m_bytes_have_send-len1;
-                iov[1].iov_len=m_bytes_to_send-m_bytes_have_send;
+                m_iov[0].iov_len=0;
+                m_iov[1].iov_base=start2+m_bytes_have_send-len1;
+                m_iov[1].iov_len=m_bytes_to_send-m_bytes_have_send;
             }
         }
         else//所有数据已发送完
         {
-            writev_cnt=0;
             retrieve(m_bytes_have_send);
             return 1;
         }

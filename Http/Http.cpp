@@ -10,6 +10,7 @@
 #include<sys/mman.h>
 #include<unistd.h>
 #include "Log.h"
+#include <string.h>
 using namespace std;
 
 locker m_loc;//保护数据库插入、保护username_to_password
@@ -34,14 +35,11 @@ void Http::init()//维持同一个连接下的初始化
         m_file_addres=0;
 
 }
-void Http::init(int sockfd, const sockaddr_in &addr,Timer* t)
+void Http::init(int sockfd, const sockaddr_in &addr)
 {
         m_loc2.lock();
         m_user_count+=1;
         m_loc2.unlock();
-
-        m_timer=NULL;
-        m_timer=t;
         m_socket=sockfd;
         m_client_address=addr;
         cgi_succ=false;
@@ -59,7 +57,7 @@ void Http::close_conn()//关闭连接
         remove_fd_from_epoll(m_socket);//从epoll空间删除fd
         close(m_socket);//关闭连接
 
-        Log::getInstance()->write_log(INFO,"server close connection");
+        //Log::getInstance()->write_log(INFO,"server close connection");
 }
 
 void Http::mysqlInit_userAndpawd()//将数据库的帐号密码加载到username_to_password
@@ -270,7 +268,7 @@ Http::HTTP_CODE Http::parse_header(const string& text)//解析请求首部
 
 Http::HTTP_CODE Http::do_request()//报文响应函数
 {
-    Log::getInstance()->write_log(DEBUG,"in Http::do_request");
+    //Log::getInstance()->write_log(DEBUG,"in Http::do_request");
     m_real_file=m_doc_root;
     //进行登陆校验和注册校验
 
@@ -372,7 +370,7 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
     {
         m_real_file+="/log.html";
         m_file_type="text/html";
-        Log::getInstance()->write_log(DEBUG,"in Http::do_request,request file is /log.html");
+        //Log::getInstance()->write_log(DEBUG,"in Http::do_request,request file is /log.html");
     }
 
     //图片页面
@@ -390,26 +388,23 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
         m_file_type="text/html";
         //Log::getInstance()->write_log(DEBUG,"in Http::do_request,request file is /video.html");
     }
-    //登陆校验成功就发送url实际请求的文件
-    else if(cgi_succ)
+    else
     {
-        m_real_file+=m_url;
-        m_file_type="text/html";
         if(m_url.size()>=3)
         {
+            m_real_file+=m_url;
+            m_file_type="text/html";
             string file_type=m_url.substr(m_url.size()-3,3);
             if(file_type=="jpg")
                 m_file_type="image/jpeg";
             else if(file_type=="mp4")
                 m_file_type="video/mpeg4";
         }
-
-        //Log::getInstance()->write_log(DEBUG,"in Http::do_request,request file is %s",m_real_file.c_str());
-    }
-    else //否则返回主页面
-    {
-        m_real_file+="/judge.html";
-        m_file_type="text/html";
+        else
+        {
+            m_real_file+="/judge.html";
+            m_file_type="text/html";
+        }
     }
 
     //检查是否存在这样的文件
@@ -436,8 +431,14 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
     //以只读的方式打开文件
     int fd=open(m_real_file.c_str(),O_RDONLY);
 
+    if(fd<0)
+        Log::getInstance()->write_log(ERRO,"in Http::do_request,open(),%s",strerror(errno));
     //将文件映射到虚拟内存中,对此区域作的任何修改都不会写回原来的文件内容
     m_file_addres=(char*)mmap(0,m_file_stat.st_size,PROT_READ,MAP_PRIVATE,fd,0);
+    if(m_file_addres==((void*)-1))
+    {
+        Log::getInstance()->write_log(ERRO,"in Http::do_request,mmap(),%s",strerror(errno));
+    }
 
     close(fd);
 
@@ -446,7 +447,7 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
 
 Http::HTTP_CODE Http::process_read()
 {
-    Log::getInstance()->write_log(DEBUG,"in Http::process_read");
+    //Log::getInstance()->write_log(DEBUG,"in Http::process_read");
     LINE_STATUS line_status = LINE_OK;
     HTTP_CODE ret = NO_REQUEST;
     string text;
@@ -591,23 +592,24 @@ bool Http::process_write(HTTP_CODE ret)//生成响应报文，将其写入用户
         m_iov[1].iov_base=m_file_addres;
         m_iov[1].iov_len=m_file_stat.st_size;
         m_iov_cnt=2;
+        m_writebuffer.set_iov(m_iov,m_iov_cnt);
         return true;
         break;
 
     default:
-        return false;
         break;
 
     }
 
     m_iov_cnt=1;
+    m_writebuffer.set_iov(m_iov,m_iov_cnt);
     return true;
 }
 
 bool Http::Write()//将数据从用户写缓冲区、文件映射地址 写到内核写缓冲区中，返回false说明要关闭连接
 {
     //Log::getInstance()->write_log(DEBUG,"in Http::Write");
-    int ret=m_writebuffer.writeFD(m_socket,m_iov,m_iov_cnt);
+    int ret=m_writebuffer.writeFD(m_socket);
     if(ret==-1)//出错，应关闭连接
     {
         unmap();
@@ -621,16 +623,19 @@ bool Http::Write()//将数据从用户写缓冲区、文件映射地址 写到�
     else if(ret==1)//数据完整写到内核缓冲区中
     {
         unmap();
-        mod_fd_in_epoll(m_socket,EPOLLIN);//重置EPOLLONESHOT可读事件
+
+
         if(m_linger)
         {
             init();
+            mod_fd_in_epoll(m_socket,EPOLLIN);//重置EPOLLONESHOT可读事件
             return true;
         }
         else
         {
             return false;
         }
+
     }
 
     return false;
@@ -643,19 +648,11 @@ void Http::process()//
             bool ret=Read();
             if(ret==false)//关闭连接
             {
-                Timer* t=m_timer;
-                t->m_expected_time=0;
-                SigFrame::getInstace()->adjust(t);//将其调整为过期定时器
+                close_conn();
                 return;
             }
             else
             {
-                //调整定时器
-                Timer* t=m_timer;
-                time_t cur=time(NULL);
-                t->m_expected_time=cur+3*TIME_SLOT;
-                SigFrame::getInstace()->adjust(t);
-
 
                 //解析报文
                 HTTP_CODE temp_ret=process_read();
@@ -677,19 +674,10 @@ void Http::process()//
             bool ret=Write();
             if(ret==false)//关闭连接
             {
-                Timer* t=m_timer;
-                t->m_expected_time=0;
-                SigFrame::getInstace()->adjust(t);//将其调整为过期定时器
+                close_conn();
                 return;
             }
-            else
-            {
-                //调整定时器
-                Timer* t=m_timer;
-                time_t cur=time(NULL);
-                t->m_expected_time=cur+3*TIME_SLOT;
-                SigFrame::getInstace()->adjust(t);
-            }
+
         }
 
     }

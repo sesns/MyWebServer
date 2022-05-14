@@ -4,7 +4,7 @@
 #include "Log.h"
 #include "Http.h"
 
-
+/*
 void Timer::timeout_event()
 {
     Http* m_user_p=(Http*)m_user;
@@ -39,15 +39,6 @@ void TimerList::Adjust(Timer* t)
 {
     if(!t)
         return;
-
-    if(t->next==tail)//该定时器超时时间最大，不用调整位置
-    {
-        return;
-    }
-    if(t->next->m_expected_time>=t->m_expected_time)//该定时器超时时间调整后仍<=下一个定时器超时时间，不用调整位置
-    {
-        return;
-    }
 
     loc.lock();
 
@@ -100,3 +91,4 @@ void TimerList::ProcessTimeout()
     loc.unlock();
 
 }
+*/

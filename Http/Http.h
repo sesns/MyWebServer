@@ -132,7 +132,6 @@ public:
     static int m_epoll_fd;
     static int m_user_count;
     static MySQL_connection_pool* m_conn_pool;//数据库连接池
-    Timer* m_timer;
     int task_type;//指示线程池请求队列中的http对象应执行的任务类型，1从socket读取数据,报文解析报文撰写，2向socket发送数据
 public:
     Http()
@@ -151,7 +150,7 @@ public:
     static void mysqlInit_userAndpawd();//将数据库的帐号密码加载到username_to_password
     void init();//维持同一个连接下的初始化;
     //新连接的初始化
-    void init(int sockfd, const sockaddr_in &addr,Timer* t);
+    void init(int sockfd, const sockaddr_in &addr);
     void close_conn();//关闭连接
     bool Read();//将数据从内核读缓冲区读取到用户的读缓冲区,返回false说明对方关闭连接或读取出错
     bool Write();//将数据从用户写缓冲区、文件映射地址 写到内核写缓冲区中，返回false说明要关闭连接

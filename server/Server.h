@@ -31,15 +31,15 @@ private:
     MySQL_connection_pool* m_mysql_conn_pool;//数据库连接池
 
     //定时器相关
-    SigFrame* m_sigframe;//定时器框架
-    int m_read_pipfd;//管道读端
+    //SigFrame* m_sigframe;//定时器框架
+    //int m_read_pipfd;//管道读端
 
 private:
     void httpinit();
     void mysqlinit(size_t mysql_con_num,string user,string pawd,string dbname);
     void threadinit(int thread_num);
     void loginit(bool close_log,bool is_async);
-    void timerinit(int epoll_fd);
+    //void timerinit(int epoll_fd);
     void eventlisten();//创建监听socket、创建epoll
     void dealwith_conn();
 public:
@@ -59,7 +59,7 @@ public:
 
         threadinit(thread_num);
 
-        timerinit(m_epollfd);
+        //timerinit(m_epollfd);
 
 
     }

@@ -3,6 +3,7 @@
 #include <vector>
 #include <assert.h>
 #include<string>
+#include <sys/uio.h>
 using namespace std;
 class Buffer
 {
@@ -12,13 +13,16 @@ private:
     size_t writeidx;//写指针的位置
     size_t read_only_idx;//只用于读，不会更改读指针
 
-    unsigned int writev_cnt;//调用writev的次数
     size_t m_bytes_have_send;//已经向socket发送的数据
     size_t m_bytes_to_send;//要向socket发送的数据
-    size_t len1;//第一块数据区的大小
-    size_t len2;//第二块数据区的大小
-    char* start1;//第一块数据区的起始位置
-    char* start2;//第二块数据区的起始位置
+    struct iovec* m_iov;
+    size_t m_iov_cnt;
+    int len1;
+    int len2;
+    char* start1;
+    char* start2;
+
+
 private:
     char* getBegin()
     {
@@ -50,17 +54,25 @@ public:
     readeridx(kCheapPrepend),
     writeidx(kCheapPrepend),
     read_only_idx(kCheapPrepend),
-    writev_cnt(0),
     m_bytes_have_send(0),
-    m_bytes_to_send(0),
-    len1(0),
-    len2(0),
-    start1(0),
-    start2(0)
+    m_bytes_to_send(0)
     {
+        len1=0;
+        len2=0;
+        start1=nullptr;
+        start2=nullptr;
         assert(prepenableBytes()==8);
         assert(readableBytes()==0);
         assert(writableBytes()==initialSize);
+        m_iov_cnt=1;
+        m_iov=nullptr;
+        m_iov=(struct iovec*)malloc(m_iov_cnt*sizeof(struct iovec));
+    }
+
+    ~Buffer()
+    {
+        if(m_iov)
+            free(m_iov);
     }
 
     void init()
@@ -68,19 +80,20 @@ public:
         readeridx=kCheapPrepend;
         writeidx=kCheapPrepend;
         read_only_idx=kCheapPrepend;
-        writev_cnt=0;
         m_bytes_have_send=0;
         m_bytes_to_send=0;
+
         len1=0;
         len2=0;
-        start1=0;
-        start2=0;
+        start1=nullptr;
+        start2=nullptr;
+
         assert(prepenableBytes()==8);
         assert(readableBytes()==0);
         assert(writableBytes()==kInitialSize);
     }
     bool readFD(int sockfd);//将内核读缓冲区的数据读到应用层读缓冲区中，返回false表示读取错误出错或者对方关闭连接
-    int writeFD(int sockfd,struct iovec* iov,int iovcnt);
+    int writeFD(int sockfd);
     //将数据从用户写缓冲区、文件映射地址 写到内核写缓冲区中，返回-1关闭连接，返回0数据因内核缓冲区满没有写完，返回1数据全部发送完毕
 
     string retrieveAsString(size_t len);//从缓冲区读取长为len的数据
@@ -136,6 +149,35 @@ public:
     size_t get_read_only_idx()
     {
         return read_only_idx;
+    }
+
+    void set_iov(struct iovec* i,size_t cnt)
+    {
+        m_bytes_have_send=0;
+        m_iov[0].iov_base=getReadBegin();
+        m_iov[0].iov_len=readableBytes();
+
+        if(cnt==1)
+        {
+            m_iov_cnt=1;
+            m_bytes_to_send=m_iov[0].iov_len;
+            len1=m_iov[0].iov_len;
+            len2=0;
+            start1=(char*)m_iov[0].iov_base;
+            return;
+        }
+        else if(cnt==2)
+        {
+            m_iov_cnt=2;
+            m_iov[1].iov_base=i[1].iov_base;
+            m_iov[1].iov_len=i[1].iov_len;
+            m_bytes_to_send=m_iov[0].iov_len+m_iov[1].iov_len;
+            len1=m_iov[0].iov_len;
+            len2=m_iov[1].iov_len;
+            start1=(char*)m_iov[0].iov_base;
+            start2=(char*)m_iov[1].iov_base;
+            return;
+        }
     }
 };
 
