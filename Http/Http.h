@@ -57,6 +57,8 @@ public:
         CLOSED_CONNECTION
     };
 private:
+    TimerNode* m_timer;
+    TimerHeap* m_timerheap;
     int m_socket;//该http对象对应的连接socket
     sockaddr_in m_client_address;//用户地址
     Buffer m_readbuffer;//用户读缓冲区
@@ -76,6 +78,7 @@ private:
     struct iovec* m_iov;//用于发送响应报文的iovec,第一个iovec指向用户写缓冲区，第二个iovec指向要发送的文件
     int m_iov_cnt;//iovec数组元素个数
     bool cgi_succ;//登陆校验成功
+    //locker m_loc1;//用于保护任意时刻http对象只能被一个对象操纵
 
 private:
     LINE_STATUS parse_line();//从状态机解析缓冲区中的一行
@@ -150,7 +153,7 @@ public:
     static void mysqlInit_userAndpawd();//将数据库的帐号密码加载到username_to_password
     void init();//维持同一个连接下的初始化;
     //新连接的初始化
-    void init(int sockfd, const sockaddr_in &addr);
+    void init(int sockfd, const sockaddr_in &addr,TimerNode* timer,TimerHeap* timerheap);
     void close_conn();//关闭连接
     bool Read();//将数据从内核读缓冲区读取到用户的读缓冲区,返回false说明对方关闭连接或读取出错
     bool Write();//将数据从用户写缓冲区、文件映射地址 写到内核写缓冲区中，返回false说明要关闭连接

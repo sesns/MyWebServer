@@ -103,7 +103,7 @@ bool Buffer::readFD(int sockfd)
         {
             if(errno==EAGAIN || errno==EWOULDBLOCK)//内核读缓冲区数据已经读取完毕
                 break;
-            Log::getInstance()->write_log(ERRO,"in Buffer::readFD,readv unknown error");
+            Log::getInstance()->write_log(ERRO,"in Buffer::readFD,fd is:%d,%s",sockfd,strerror(errno));
             return false;//读取遇到其他错误
         }
         else if(bytes_recv==0)//对方关闭连接
@@ -141,7 +141,7 @@ int Buffer::writeFD(int sockfd)
             if(errno==EAGAIN || errno==EWOULDBLOCK )
                 return 0;
             //printf("%s\n", strerror(errno));
-            Log::getInstance()->write_log(ERRO,"in Buffer::writeFD,writev unknown error");
+            Log::getInstance()->write_log(ERRO,"in Buffer::writeFD,fd is:%d,%s",sockfd,strerror(errno));
             return -1;
         }
 

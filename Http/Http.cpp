@@ -35,13 +35,16 @@ void Http::init()//维持同一个连接下的初始化
         m_file_addres=0;
 
 }
-void Http::init(int sockfd, const sockaddr_in &addr)
+void Http::init(int sockfd, const sockaddr_in &addr,TimerNode* timer,TimerHeap* timerheap)
 {
         m_loc2.lock();
         m_user_count+=1;
         m_loc2.unlock();
+
         m_socket=sockfd;
         m_client_address=addr;
+        m_timer=timer;
+        m_timerheap=timerheap;
         cgi_succ=false;
         add_fd_to_epoll(m_socket);
         m_readbuffer.init();
@@ -54,6 +57,7 @@ void Http::close_conn()//关闭连接
         m_loc2.lock();
         m_user_count-=1;
         m_loc2.unlock();
+
         remove_fd_from_epoll(m_socket);//从epoll空间删除fd
         close(m_socket);//关闭连接
 
@@ -186,7 +190,6 @@ Http::HTTP_CODE Http::parse_request_line(const string& text)//解析请求行
     //处理请求url和版本
     string url=text.substr(first_space_pos+1,second_space_pos-first_space_pos-1);
     string version=text.substr(second_space_pos+1,8);
-
     if(version=="HTTP/1.1" || version=="HTTP/1.0")//仅支持HTTP1.1和1.0
         m_version=version;
     else
@@ -635,6 +638,7 @@ bool Http::Write()//将数据从用户写缓冲区、文件映射地址 写到�
         {
             return false;
         }
+
 
     }
 

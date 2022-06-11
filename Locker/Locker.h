@@ -28,14 +28,16 @@ public:
 
 	~sem()
 	{
-		sem_destroy(&sem_id);
+		int ret=sem_destroy(&sem_id);
+		if(ret!=0)
+            cout<<"sem_destroy error!\n";
 	}
 
 	bool wait()//消费资源
 	{
 		int ret=sem_wait(&sem_id);
 		if(ret!=0)
-			throw exception();
+			cout<<"sem_wait error!\n";
 		return ret==0;
 	}
 
@@ -43,7 +45,7 @@ public:
 	{
 		int ret=sem_post(&sem_id);
 		if(ret!=0)
-			throw exception();
+			cout<<"sem_post error!\n";
 		return ret==0;
 	}
 
@@ -67,7 +69,6 @@ public:
 		if(ret!=0)
         {
             cout<<"mutex_destroy error!\n";
-            cout<<ret<<"\n";
         }
 	}
 
@@ -75,7 +76,7 @@ public:
 	{
 		int ret=pthread_mutex_lock(&mtx);
 		if(ret!=0)
-			throw exception();
+			cout<<"mutex_lock error!\n";
 		return ret==0;
 	}
 
@@ -83,7 +84,7 @@ public:
 	{
 		int ret=pthread_mutex_unlock(&mtx);
 		if(ret!=0)
-			throw exception();
+			cout<<"mutex_unlock error!\n";
 		return ret==0;
 	}
 
@@ -111,7 +112,6 @@ public:
 		if(ret!=0)
         {
             cout<<"cond_destroy error!\n";
-            cout<<ret<<"\n";
         }
 	}
 
@@ -119,7 +119,7 @@ public:
 	{
 		int ret=pthread_cond_wait(&cnd,m_mutex);
 		if(ret!=0)
-			throw exception();
+			cout<<"cond_wait error!\n";
 		return ret==0;
 	}
 
@@ -127,7 +127,7 @@ public:
 	{
 		int ret=pthread_cond_signal(&cnd);
 		if(ret!=0)
-			throw exception();
+			cout<<"cond_signal error!\n";
 		return ret==0;
 	}
 
@@ -135,7 +135,7 @@ public:
 	{
 		int ret=pthread_cond_broadcast(&cnd);
 		if(ret!=0)
-			throw exception();
+			cout<<"cond_broadcast error!\n";
 		return ret==0;
 	}
 
