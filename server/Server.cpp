@@ -53,92 +53,53 @@ void Server::loginit(bool close_log,bool is_async)
         }
     }
 
-void set_noblocking(int fd)//将文件描述符设置为非阻塞
-    {
-        int old_option=fcntl(fd,F_GETFL);//获取文件状态标志
-        int new_option=old_option | O_NONBLOCK;//设置为非阻塞
-        fcntl(fd,F_SETFL,new_option);//设置文件状态标志
-    }
-
-void setsig(int sig,void(handler)(int))//设置信号
-    {
-        struct sigaction sa;
-        sa.sa_handler=handler;
-        sa.sa_flags=SA_RESTART;//如果系统调用被打断了则重新执行
-        sigfillset(&sa.sa_mask);//屏蔽所有信号以避免信号竞态
-        assert(sigaction(sig,&sa,NULL)!=-1);//注册信号处理函数
-    }
-
-void Server::timerinit()
-    {
-        //创建双向管道以统一事件源
-        int ret = socketpair(PF_UNIX, SOCK_STREAM, 0, m_pipfds);
-        assert(ret!=-1);
-
-        //将管道描述符设置为非阻塞
-        set_noblocking(m_pipfds[0]);
-        set_noblocking(m_pipfds[1]);
-
-        //向epoll空间注册读端管道,以统一事件源
-        epoll_event event;
-        event.data.fd=m_pipfds[0];
-        event.events=EPOLLIN;
-        epoll_ctl(m_epollfd,EPOLL_CTL_ADD,m_pipfds[0],&event);
-
-        global_pipfds[0]=m_pipfds[0];
-        global_pipfds[1]=m_pipfds[1];
-
-        //设置信号
-        setsig(SIGALRM,sig_handler);
-        setsig(SIGTERM,sig_handler);
-
-        m_issigalarming=false;
-
-    }
-
-void Server::timeoutCallBack(client_data* Data)
+void Server::timeout(client_data* userdata)
 {
-    Log::getInstance()->write_log(INFO,"server close connection becuase conn timeout,fd is:%d",Data->sockfd);
-    m_users[Data->sockfd].close_conn();
-
-}
-
-void Server::tick()
-{
-    while(m_timerheap.size())
+    if(!userdata)
     {
-        TimerNode* temp=m_timerheap.top();
-        int tempfd=temp->m_userdata->sockfd;
-        time_t tp=m_timerheap.top()->GetExpeTime();
-        time_t cur=time(nullptr);
-        if(tp<=cur)//堆顶计时器过期了
-        {
-            m_timer_user_data[tempfd].timer=nullptr;
-            m_timerheap.processTop();
-
-            //Log::getInstance()->write_log(INFO,"conn timwout so server close connection");
-        }
-        else
-            break;
-    }
-    if(m_timerheap.size()==0)
-    {
-        m_issigalarming=false;
+        cout<<"timeout():nullpointer\n";
         return;
     }
-    time_t cur=time(nullptr);
-    time_t delay=m_timerheap.top()->GetExpeTime()-cur;
-    if(delay<=0)
-        delay=5;
+    int sockfd=userdata->sockfd;
+    m_users[sockfd].close_conn();//关闭连接
 
+    userdata->timer=nullptr;
+    userdata->sockfd=-1;
 
-    //cur=time(nullptr);
-    //cout<<"in tick("<<delay<<"): "<<cur<<"\n";
-    alarm(delay);
-    m_issigalarming=true;
+}
+void Server::timerinit()
+{
+    m_timerdata=new client_data[MAX_FD];
+
+    // 创建 timerfd
+    m_timerfd = timerfd_create(CLOCK_MONOTONIC, 0); //创建定时器的文件描述符
+
+    //注册到epoll
+    epoll_event event;
+    event.data.fd=m_timerfd;
+    event.events=EPOLLIN;
+    epoll_ctl(m_epollfd,EPOLL_CTL_ADD,m_timerfd,&event);
 
 }
 
+void Server::startTiming()//开始计时
+{
+    unsigned long long thetime=m_timerheap.getTopTime();
+
+    //根据堆顶元素的计时时刻计算下一次timerfd的超时时刻
+    startTimer.it_value.tv_sec=thetime/1000;
+    startTimer.it_value.tv_nsec=(thetime%1000)*1000000;
+    startTimer.it_interval.tv_sec=0;
+    startTimer.it_interval.tv_nsec=0;
+
+    thetime=m_timerheap.getTopTime();
+    unsigned long long targetTime=startTimer.it_value.tv_sec*1000+startTimer.it_value.tv_nsec/(1000*1000);
+    if(targetTime<=thetime)
+        startTimer.it_value.tv_sec+=1;
+
+    if(timerfd_settime(m_timerfd, TFD_TIMER_ABSTIME, &startTimer, NULL)==(-1))
+        Log::getInstance()->write_log(ERRO,"in evenloop,timerfd ",strerror(errno));
+}
 void Server::eventlisten()//创建监听socket、创建epoll
     {
         m_listenfd=socket(PF_INET,SOCK_STREAM,0);
@@ -207,24 +168,26 @@ void Server::dealwith_conn()
                 return;
             }
 
-            //生成定时器
-            //向定时器注册回调函数
-            std::function<void(client_data *)> cb=std::bind(&Server::timeoutCallBack,this, std::placeholders::_1);
-            //修改m_timer_user_data
-            m_timer_user_data[connfd].sockfd=connfd;
-            m_timer_user_data[connfd].timer=nullptr;
-            TimerNode* newTimer=new TimerNode(3*TIME_SLOT,&m_timer_user_data[connfd],cb);
-            m_timer_user_data[connfd].timer=newTimer;
-            m_timerheap.push(newTimer);
-            if(!m_issigalarming)//如果当前没有SIGALARM定时，则触发SIGALARM
-            {
-                //time_t cur=time(nullptr);
-                //cout<<"in dealwithconn(): "<<cur<<"\n";
-                alarm(3*TIME_SLOT);
-                m_issigalarming=true;
-            }
-            //http类对象初始化
+            bool is_timerheap_empty=m_timerheap.empty();
+
+            //通过std::bind使得std::function能够指向类成员函数
+            std::function<void(client_data *)> Func = std::bind(&Server::timeout,this, std::placeholders::_1);
+
+            //为新连接生成定时器
+            m_timerdata[connfd].sockfd=connfd;
+            m_timerdata[connfd].timer=nullptr;
+            Timer* newTimer=m_timerheap.addTimer(5*TIME_SLOT,Func,&m_timerdata[connfd]);
+            m_timerdata[connfd].timer=newTimer;
+
+            //初始化http对象
             m_users[connfd].init(connfd,client_address,newTimer,&m_timerheap);
+
+            //如果一开始timerheap空了，新连接到来后应发起计时
+            if(is_timerheap_empty)//此时由于新计时器push到timerheap中，timeheap非空
+            {
+                startTiming();
+            }
+
         }
 
         return;
@@ -233,8 +196,7 @@ void Server::dealwith_conn()
 
 void Server::enentloop()
     {
-        bool is_timeout=false;
-        bool stop_server=false;//如果有信号SIGTERM，就可以将其置为true以关闭服务器
+        bool stop_server=false;
         while(!stop_server)
         {
             int num=epoll_wait(m_epollfd,m_events,MAX_EPOLL_EVENTS,-1);
@@ -257,43 +219,41 @@ void Server::enentloop()
                 else if(m_events[i].events & (EPOLLHUP | EPOLLERR | EPOLLRDHUP))//关闭连接
                 {
                     //Log::getInstance()->write_log(DEBUG,"in evenloop,HUP OR ERR");
-                    TimerNode* t=m_timer_user_data[sockfd].timer;
-                    m_timer_user_data[sockfd].timer=nullptr;
-                    m_timerheap.deleteTimer(t);
+                    //删除定时器
+                    Timer* t=m_timerdata[sockfd].timer;
+                    m_timerheap.delTimer(t);
+                    m_timerdata[sockfd].timer=nullptr;
+                    m_timerdata[sockfd].sockfd=-1;
+
+                    //关闭连接
                     m_users[sockfd].close_conn();
-                    Log::getInstance()->write_log(INFO,"client close connection,fd is:%d",sockfd);
+                    //Log::getInstance()->write_log(INFO,"client close connection,fd is:%d",sockfd);
 
                 }
 
-                else if(sockfd==m_pipfds[0] && (m_events[i].events & EPOLLIN))//信号事件
+
+                else if(sockfd==m_timerfd)//超时事件
                 {
-                    char signals[1024];
-                    int ret=recv(m_pipfds[0],signals,sizeof(signals),0);
-                    if(ret==-1)
-                        continue;
-                    for(int i=0;i<ret;i++)
+
+                    //超时后必须读取timer 文件描述符上的数据，否则timerfd无法正常运行
+                    uint64_t res;
+                    read(m_timerfd, &res, sizeof(res));
+
+                    //若堆顶计时器超时则处理它
+                    m_timerheap.takeAllTimeout();
+
+                    if(!m_timerheap.empty())
                     {
-                        switch(signals[i])
-                        {
-                        case SIGTERM:
-                            stop_server=true;
-                            Log::getInstance()->write_log(INFO,"receive SIGTERM");
-                            Log::getInstance()->close_log();//停止写线程的循环
-                            Threadpool<Http*>::getInstance()->stop_threads();//停止线程池线程的循环
-                            break;
-                        case SIGALRM:
-                            Log::getInstance()->write_log(INFO,"receive SIGALRM");
-                            is_timeout=true;
-                            break;
-                        }
+                        startTiming();
                     }
+
                 }
 
                 //处理客户连接上的数据
                 else if(m_events[i].events & EPOLLIN)//可读事件
                 {
-                    TimerNode* temp_timer=m_timer_user_data[sockfd].timer;
-                    m_timerheap.addjust(temp_timer,3*TIME_SLOT);
+                    Timer* t=m_timerdata[sockfd].timer;
+                    m_timerheap.addjust(t,15*TIME_SLOT);//延长15s
                     m_users[sockfd].task_type=1;
                     Threadpool<Http*>::getInstance()->append(&m_users[sockfd]);
 
@@ -301,8 +261,8 @@ void Server::enentloop()
                 }
                 else if(m_events[i].events & EPOLLOUT)//可写事件
                 {
-                    TimerNode* temp_timer=m_timer_user_data[sockfd].timer;
-                    m_timerheap.addjust(temp_timer,3*TIME_SLOT);
+                    Timer* t=m_timerdata[sockfd].timer;
+                    m_timerheap.addjust(t,15*TIME_SLOT);//延长15s
                     m_users[sockfd].task_type=2;
                     Threadpool<Http*>::getInstance()->append(&m_users[sockfd]);
 
@@ -310,10 +270,5 @@ void Server::enentloop()
 
             }
 
-            if(is_timeout)
-            {
-                tick();
-                is_timeout=false;
-            }
         }
     }

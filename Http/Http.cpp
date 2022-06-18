@@ -35,16 +35,17 @@ void Http::init()//维持同一个连接下的初始化
         m_file_addres=0;
 
 }
-void Http::init(int sockfd, const sockaddr_in &addr,TimerNode* timer,TimerHeap* timerheap)
+void Http::init(int sockfd, const sockaddr_in &addr,Timer* t,TimerManager* timerheap)
 {
         m_loc2.lock();
         m_user_count+=1;
         m_loc2.unlock();
 
+        m_timer=t;
+        m_timerheap=timerheap;
+
         m_socket=sockfd;
         m_client_address=addr;
-        m_timer=timer;
-        m_timerheap=timerheap;
         cgi_succ=false;
         add_fd_to_epoll(m_socket);
         m_readbuffer.init();
@@ -652,6 +653,7 @@ void Http::process()//
             bool ret=Read();
             if(ret==false)//关闭连接
             {
+                m_timerheap->delTimer(m_timer);
                 close_conn();
                 return;
             }
@@ -678,6 +680,7 @@ void Http::process()//
             bool ret=Write();
             if(ret==false)//关闭连接
             {
+                m_timerheap->delTimer(m_timer);
                 close_conn();
                 return;
             }

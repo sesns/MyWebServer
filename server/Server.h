@@ -31,21 +31,23 @@ private:
     MySQL_connection_pool* m_mysql_conn_pool;//数据库连接池
 
     //定时器相关
-    TimerHeap m_timerheap;//时间堆
-    int m_pipfds[2];//双向管道，【0】为读端，【1】为写端
-    client_data m_timer_user_data[MAX_FD];
-    bool m_issigalarming;//当前是否进行alarm的计时
+    TimerManager m_timerheap;
+    client_data* m_timerdata;
+    int m_timerfd;
+    struct itimerspec startTimer;//用于设置定时器的时长
 
 private:
     void httpinit();
     void mysqlinit(size_t mysql_con_num,string user,string pawd,string dbname);
     void threadinit(int thread_num);
     void loginit(bool close_log,bool is_async);
-    void timerinit();
     void eventlisten();//创建监听socket、创建epoll
     void dealwith_conn();
-    void timeoutCallBack(client_data*);
-    void tick();//心搏函数
+
+    void timerinit();
+    void startTiming();//开始计时
+    void timeout(client_data* userdata);//定时器回调函数
+
 public:
     Server(unsigned short port,size_t mysql_con_num,string user,string pawd,string dbname,int thread_num,bool close_log,bool is_async)
     {
@@ -65,7 +67,6 @@ public:
 
         timerinit();
 
-
     }
     ~Server()
     {
@@ -73,12 +74,15 @@ public:
             delete[] m_users;
         if(m_events)
             delete[] m_events;
+        if(m_timerdata)
+            delete[] m_timerdata;
         close(m_listenfd);
         close(m_epollfd);
 
     }
 
     void enentloop();
+
 };
 
 #endif // SERVER_H_INCLUDED

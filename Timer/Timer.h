@@ -1,7 +1,8 @@
 #ifndef TIMER_H_INCLUDED
 #define TIMER_H_INCLUDED
 #include "Locker.h"
-#include <time.h>
+#include <sys/timerfd.h>
+#include <sys/time.h>
 #include <unordered_map>
 #include <functional>
 #include <vector>
@@ -13,58 +14,63 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-const int TIME_SLOT=5;//最小超时单位
+const int TIME_SLOT=1000;//超时时长为1s
 
-class TimerNode;
+class Timer;
 
 struct client_data {
     int sockfd;
-    TimerNode* timer;
+    Timer* timer;
 };
 
-class TimerNode
+
+class Timer
 {
 private:
-    time_t m_expec;//到期时间
-public:
     std::function<void(client_data *)> callBackFunc; //回调函数
     client_data * m_userdata;
-
-    TimerNode(time_t delay,client_data* userdata,std::function<void(client_data *)> fun):
-        m_userdata(userdata),callBackFunc(fun)
-        {
-            time_t cur=time(nullptr);
-            m_expec=cur+delay;
-        }
-    time_t GetExpeTime()
+    unsigned long long expire_;
+public:
+    Timer(unsigned long long expire,std::function<void(client_data *)> fun,client_data* userdata)
+    :expire_(expire),callBackFunc(fun),m_userdata(userdata)
     {
-        return m_expec;
+
     }
 
-    void addTime(time_t delay)
+    void active()
     {
-        m_expec+=delay;
+        callBackFunc(m_userdata);
     }
 
-    void changeTime(time_t newtime)
+    unsigned long long getExpire()
     {
-        m_expec=newtime;
+        return expire_;
+    }
+
+    void changeTimer(int t)
+    {
+        expire_=t;
+    }
+
+    void addTime(int t)
+    {
+        expire_+=t;
     }
 
 };
 
-
-class TimerHeap//最小堆
+class TimerManager
 {
 private:
-    TimerNode* shaobing;//哨兵
-    vector<TimerNode*> heap;
-    unordered_map<TimerNode*,int> umap;//timernode->index,用于快速找到heap中对应位置
+    Timer* shaobing;//哨兵
+    vector<Timer*> heap;
+    unordered_map<Timer*,int> umap;//timernode->index,用于快速找到heap中对应位置
     locker loc;
-private:
+
+    bool cmp(Timer* lhs, Timer* rhs) const { return lhs->getExpire() < rhs->getExpire(); }
     void swim(int pos)
     {
-        while(heap[pos]->GetExpeTime()<heap[pos/2]->GetExpeTime())
+        while(cmp(heap[pos],heap[pos/2]))
         {
             swap(umap[heap[pos]],umap[heap[pos/2]]);
             swap(heap[pos],heap[pos/2]);
@@ -72,37 +78,23 @@ private:
         }
     }
 
-
     void sink(int pos)
     {
         int next;
-        while(2*pos<(heap.size()))
+        while((2*pos)<heap.size())
         {
             next=2*pos;
-            if(next<=(heap.size()-2) && heap[next+1]->GetExpeTime()<heap[next]->GetExpeTime())
+            if(next<=(heap.size()-2) && cmp(heap[next+1],heap[next]))
                 next++;
-            if(heap[pos]->GetExpeTime()<=heap[next]->GetExpeTime())
+            if(!cmp(heap[next],heap[pos]))
                 break;
-
             swap(umap[heap[pos]],umap[heap[next]]);
             swap(heap[pos],heap[next]);
             pos=next;
         }
     }
-public:
-    TimerHeap()
-    {
-        shaobing=new TimerNode(0,nullptr,nullptr);
-        shaobing->changeTime(1);
-        heap.push_back(shaobing);//哨兵
-        umap[shaobing]=0;
-    }
-    ~TimerHeap()
-    {
-        if(shaobing)
-            delete shaobing;
-    }
-    void push(TimerNode* ele)
+
+    void push(Timer* ele)
     {
 
         heap.push_back(ele);
@@ -113,7 +105,7 @@ public:
 
     void pop()
     {
-        TimerNode* topNode=heap[1];
+        Timer* topNode=heap[1];
         umap.erase(topNode);
         heap[1]=heap.back();
         umap[heap[1]]=1;
@@ -122,57 +114,95 @@ public:
 
     }
 
-    TimerNode* top()
+    Timer* top()
     {
         return heap[1];
     }
-
-    void addjust(TimerNode* ele,time_t delay)//延长定时器的到期时间
+public:
+    TimerManager()
     {
-
-        ele->addTime(delay);
-        int index=umap[ele];
-        sink(index);
-
+        shaobing=new Timer(0,nullptr,nullptr);
+        heap.push_back(shaobing);//哨兵
+        umap[shaobing]=0;
     }
 
-    void deleteTimer(TimerNode* ele)
+    ~TimerManager()
     {
+        if(shaobing)
+            delete shaobing;
+    }
 
-        ele->changeTime(1);
-        int index=umap[ele];
+    unsigned long long getCurrentMillisecs()
+    {
+        struct timespec ts;
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        return ts.tv_sec * 1000 + ts.tv_nsec / (1000 * 1000);
+    }
+
+    Timer* addTimer(int delay,std::function<void(client_data *)> fun,client_data* userdata)
+    {
+        if(delay<=0)
+            return nullptr;
+
+        loc.lock();
+        unsigned long long now=getCurrentMillisecs();
+        Timer* timer=new Timer(now+delay,fun,userdata);
+
+        push(timer);
+        loc.unlock();
+        return timer;
+    }
+
+    void delTimer(Timer* timer)
+    {
+        loc.lock();
+        timer->changeTimer(1);
+        int index=umap[timer];
         swim(index);
         pop();
-
-    }
-
-    int size()
-    {
-        return heap.size()-1;
-    }
-
-    void processTop()//假设堆顶超时，处理堆顶计时器（调用回调函数并pop）
-    {
-
-        if(size())
+        if(timer)
         {
-            TimerNode* node=top();
-            if(node->callBackFunc)
-                    node->callBackFunc(node->m_userdata);
-            pop();
+            delete timer;
         }
-
+        loc.unlock();
     }
 
-    void Print()
+    void addjust(Timer* timer,int delay)
     {
-        for(int i=0;i<heap.size();i++)
+        loc.lock();
+        timer->addTime(delay);
+        int index=umap[timer];
+        sink(index);
+        loc.unlock();
+    }
+
+    void takeAllTimeout()
+    {
+        unsigned long long now=getCurrentMillisecs();
+        loc.lock();
+        while(!empty())
         {
-            cout<<i<<": "<<heap[i]->GetExpeTime()<<"\n";
+            Timer* timer=top();
+            if(timer->getExpire()<=now)
+            {
+                pop();
+                timer->active();
+                delete timer;
+            }
+            else
+                break;
         }
-        cout<<"*******************\n";
+        loc.unlock();
+    }
+
+    unsigned long long getTopTime()
+    {
+        return top()->getExpire();
+    }
+    bool empty()
+    {
+        return (heap.size()-1)==0;
     }
 };
-
 
 #endif // TIMER_H_INCLUDED
