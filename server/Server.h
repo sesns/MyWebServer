@@ -7,7 +7,7 @@
 #include "Log.h"
 #include "Http.h"
 const int MAX_FD=65536;//最大文件描述符数
-const int MAX_EPOLL_EVENTS=10000;//最大事件数
+const int MAX_EPOLL_EVENTS=65536;//最大事件数
 extern int errno;
 
 class Server

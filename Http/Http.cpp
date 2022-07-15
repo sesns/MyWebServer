@@ -16,7 +16,7 @@ using namespace std;
 locker m_loc;//保护数据库插入、保护username_to_password
 locker m_loc2;//保护user_count;
 unordered_map<string,string> username_to_password;//web页面用户注册的帐号密码
-int Http::m_user_count=0;
+atomic<int> Http::m_user_count(0);
 int Http::m_epoll_fd=-1;
 MySQL_connection_pool* Http::m_conn_pool=NULL;
 
@@ -37,10 +37,9 @@ void Http::init()//维持同一个连接下的初始化
 }
 void Http::init(int sockfd, const sockaddr_in &addr,Timer* t,TimerManager* timerheap)
 {
-        m_loc2.lock();
-        m_user_count+=1;
-        m_loc2.unlock();
-
+    //m_loc2.lock();
+        m_user_count++;
+    //m_loc2.unlock();
         m_timer=t;
         m_timerheap=timerheap;
 
@@ -55,10 +54,9 @@ void Http::init(int sockfd, const sockaddr_in &addr,Timer* t,TimerManager* timer
 
 void Http::close_conn()//关闭连接
 {
-        m_loc2.lock();
-        m_user_count-=1;
-        m_loc2.unlock();
-
+    //m_loc2.lock();
+        m_user_count--;
+    //m_loc2.unlock();
         remove_fd_from_epoll(m_socket);//从epoll空间删除fd
         close(m_socket);//关闭连接
 
@@ -262,6 +260,16 @@ Http::HTTP_CODE Http::parse_header(const string& text)//解析请求首部
     {
         m_host=text.substr(5,text.size()-5);
     }
+    else if(text.find("Content-Type:")!=-1)
+    {
+        int boundary_pos=text.find("boundary=");
+        if(boundary_pos!=-1)
+        {
+            m_boundary=text.substr(boundary_pos+9,text.size()-boundary_pos-9);
+        }
+        else
+            m_boundary="";
+    }
     else
     {
         //Log::getInstance()->write_log(WARN,"in Http::parse_header,unknown header");
@@ -276,7 +284,23 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
     m_real_file=m_doc_root;
     //进行登陆校验和注册校验
 
-    if(m_url.size()==2 && m_method=="POST" && (m_url[1]=='2' || m_url[1]=='3'))
+    if(m_url=="/T")//用于测试有mysql场景下的性能
+    {
+        string query("SELECT * FROM user WHERE username = ‘zhanghao’");
+
+                MYSQL* conn=NULL;
+                MySQLconRAII(&conn,m_conn_pool);
+
+                m_loc.lock();
+                int res=mysql_query(conn,query.c_str());//查询数据库
+                m_loc.unlock();
+            m_real_file+="/judge.html";
+        m_file_type="text/html";
+
+    }
+
+
+    else if(m_method=="POST" && (m_url=="/2" || m_url=="/3"))
     {
         //从请求报文的报文体中将帐号密码提取出来,帐号密码格式为 user=123&password=123
         int pos=m_string.find("&");
@@ -354,7 +378,7 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
 
 
     //主页面
-    else if(m_url.size()==1 && m_url[0]=='/')
+    else if(m_url=="/")
     {
         m_real_file+="/judge.html";
         m_file_type="text/html";
@@ -362,7 +386,7 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
     }
 
     //表示请求注册页面
-    else if(m_url.size()==2 && m_url[1]=='0')
+    else if(m_url=="/0")
     {
         m_real_file+="/register.html";
         m_file_type="text/html";
@@ -370,7 +394,7 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
     }
 
     //表示请求登陆页面
-    else if(m_url.size()==2 && m_url[1]=='1')
+    else if(m_url=="/1")
     {
         m_real_file+="/log.html";
         m_file_type="text/html";
@@ -378,7 +402,7 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
     }
 
     //图片页面
-    else if(m_url.size()==2 && m_url[1]=='5')
+    else if(m_url=="/5")
     {
         m_real_file+="/picture.html";
         m_file_type="text/html";
@@ -386,11 +410,17 @@ Http::HTTP_CODE Http::do_request()//报文响应函数
     }
 
     //视频页面
-    else if(m_url.size()==2 && m_url[1]=='6')
+    else if(m_url=="/6")
     {
         m_real_file+="/video.html";
         m_file_type="text/html";
         //Log::getInstance()->write_log(DEBUG,"in Http::do_request,request file is /video.html");
+    }
+
+    else if(m_url=="/UploadFile")//上传文件
+    {
+        upload_status=upload_manager_.UploadFile(m_string,m_boundary);
+        return FILE_UPLOAD;
     }
     else
     {
@@ -465,6 +495,7 @@ Http::HTTP_CODE Http::process_read()
             return BAD_REQUEST;
 
         text=m_readbuffer.retriveOneLine();
+        //cout<<text<<"\n";
         switch(m_check_status)
         {
             case CHECK_REQUESTLINE:
@@ -493,6 +524,7 @@ Http::HTTP_CODE Http::process_read()
     if(m_readbuffer.readableBytes()>=m_content_length)//说明报文体已完整地在缓冲区内
     {
         m_string=m_readbuffer.retrieveAsString(m_content_length);
+        //cout<<m_string;
         return do_request();//报文响应函数
     }
 
@@ -589,6 +621,13 @@ bool Http::process_write(HTTP_CODE ret)//生成响应报文，将其写入用户
         add_content(error_500_form);
         break;
 
+    case FILE_UPLOAD:
+        add_status_line("200",ok_200_title);
+        add_headers(upload_status.size());
+        add_black_line();
+        add_content(upload_status);
+        break;
+
     case FILE_REQUEST:
         add_status_line("200",ok_200_title);
         add_headers(m_file_stat.st_size);
@@ -650,7 +689,9 @@ void Http::process()//
     {
         if(task_type==1)//从socket读取数据,报文解析,报文撰写
         {
+
             bool ret=Read();
+
             if(ret==false)//关闭连接
             {
                 m_timerheap->delTimer(m_timer);
@@ -677,7 +718,9 @@ void Http::process()//
 
         else if(task_type==2)//向socket发送数据
         {
+
             bool ret=Write();
+
             if(ret==false)//关闭连接
             {
                 m_timerheap->delTimer(m_timer);
@@ -686,5 +729,6 @@ void Http::process()//
             }
 
         }
+
 
     }

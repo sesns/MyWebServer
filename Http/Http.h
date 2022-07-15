@@ -6,6 +6,7 @@
 #include "Log.h"
 #include "Timer.h"
 #include "Threadpool.h"
+#include "UpLoadManager.h"
 #include<sys/stat.h>
 #include<sys/epoll.h>
 #include <sys/socket.h>
@@ -15,6 +16,7 @@
 #include<sys/mman.h>
 #include<unistd.h>
 #include<unordered_map>
+#include <atomic>
 
 const string m_doc_root="/home/moocos/CodeBlockWebServer/WebServer/html_files";
 //定义http响应的一些状态信息
@@ -54,7 +56,8 @@ public:
         NO_RESOURCE,
         FORBIDDEN_REQUEST,
         FILE_REQUEST,
-        CLOSED_CONNECTION
+        CLOSED_CONNECTION,
+        FILE_UPLOAD//上传文件
     };
 private:
     int m_socket;//该http对象对应的连接socket
@@ -80,6 +83,10 @@ private:
     Timer* m_timer;
     TimerManager* m_timerheap;
     //locker m_loc1;//用于保护任意时刻http对象只能被一个对象操纵
+
+    UploadManager upload_manager_;//文件上传
+    string m_boundary;
+    string upload_status;//文件上传状态
 
 private:
     LINE_STATUS parse_line();//从状态机解析缓冲区中的一行
@@ -134,7 +141,7 @@ private:
     }
 public:
     static int m_epoll_fd;
-    static int m_user_count;
+    static atomic<int> m_user_count;
     static MySQL_connection_pool* m_conn_pool;//数据库连接池
     int task_type;//指示线程池请求队列中的http对象应执行的任务类型，1从socket读取数据,报文解析报文撰写，2向socket发送数据
 public:

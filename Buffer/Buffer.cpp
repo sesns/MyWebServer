@@ -161,7 +161,8 @@ int Buffer::writeFD(int sockfd)
         }
         else//所有数据已发送完
         {
-            retrieve(m_bytes_have_send);
+            //retrieve(m_bytes_have_send);
+            retrieve(len1);
             return 1;
         }
     }

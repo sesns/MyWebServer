@@ -42,7 +42,7 @@ void Server::loginit(bool close_log,bool is_async)
         {
             m_log=Log::getInstance();
             if(is_async)//异步日志
-                m_log->init(false,"/home/moocos/webserver_logfiles","webserverLog",100000,800000,2000);
+                m_log->init(false,"/home/moocos/webserver_logfiles","webserverLog",10000,800000,2000);
             else//同步日志
                 m_log->init(false,"/home/moocos/webserver_logfiles","webserverLog",0,800000,2000);
         }
@@ -126,7 +126,7 @@ void Server::eventlisten()//创建监听socket、创建epoll
         assert(ret>=0);
 
         //初始化epoll
-        m_epollfd=epoll_create(5);
+        m_epollfd=epoll_create(MAX_EPOLL_EVENTS);
         Http::m_epoll_fd=m_epollfd;
         m_events=new epoll_event[MAX_EPOLL_EVENTS];
 
@@ -196,9 +196,16 @@ void Server::dealwith_conn()
 
 void Server::enentloop()
     {
+        int temp=0;
+        unsigned long long cnt=0;
+        unsigned long long time1;
+        unsigned long long time2;
+        struct timespec ts;
+        struct timespec ts1;
         bool stop_server=false;
         while(!stop_server)
         {
+
             int num=epoll_wait(m_epollfd,m_events,MAX_EPOLL_EVENTS,-1);
 
             if(num<0 && errno!=EINTR)

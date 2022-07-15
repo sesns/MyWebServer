@@ -90,7 +90,6 @@ public:
 
         assert(prepenableBytes()==8);
         assert(readableBytes()==0);
-        assert(writableBytes()==kInitialSize);
     }
     bool readFD(int sockfd);//将内核读缓冲区的数据读到应用层读缓冲区中，返回false表示读取错误出错或者对方关闭连接
     int writeFD(int sockfd);
