@@ -3,6 +3,36 @@
     <head>
         <meta charset="UTF-8">
         <title>视频页面</title>
+<script>
+		function loadVideo()
+		{
+			var xmlhttp;
+
+			if (window.XMLHttpRequest)
+			{
+				// IE7+, Firefox, Chrome, Opera, Safari 浏览器执行代码
+				xmlhttp=new XMLHttpRequest();
+			}
+			else
+			{
+				// IE6, IE5 浏览器执行代码
+				xmlhttp=new ActiveXObject("Microsoft.XMLHTTP");
+			}
+			xmlhttp.onreadystatechange=function()
+			{
+				if (xmlhttp.readyState==4 && xmlhttp.status==200)
+				{
+					var blob = new Blob([xmlhttp.response], { type: 'video/mp4' });
+                    				v.src = URL.createObjectURL(blob);
+				}
+			}
+			xmlhttp.open("POST","xxx.mp4",true);
+			xmlhttp.responseType = 'blob'
+			var m_token = localStorage.getItem("xsy_token");
+			xmlhttp.send("token="+m_token);
+		}
+		
+		</script>
     </head>
     <body><br/>
 <br/>
@@ -11,7 +41,5 @@
 
 <br/>
 <br/>
-<div align="center"><video width="906" height="506" controls>
-    <source src="xxx.mp4" type="video/mp4">
-</video></div>
+<div align="center"><video id="v" style="width:500px;height:300px" controls></video><br /><input type="button" value="XHR Load Video Info" onclick="loadVideo()" /></div>
 </html>

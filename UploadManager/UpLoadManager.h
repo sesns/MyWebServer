@@ -23,7 +23,6 @@ public:
 	}
 
 	string UploadFile(const string& body,const string& boundary);
-
 };
 
 #endif // UPLOADMANAGER_H_INCLUDED

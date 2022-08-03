@@ -3,6 +3,15 @@
     <head>
         <meta charset="UTF-8">
         <title>WebServer</title>
+	<script>
+	function autoLog(){
+		var m_token=localStorage.getItem("xsy_token");
+		document.getElementById('token1').value = m_token;
+	
+		var form = document.getElementById("m_form1");
+		form.submit();
+	}	
+	</script>
     </head>
     <body>
     <br/>
@@ -15,7 +24,13 @@
                 </form>
 		<br/>
                 <form action="1" method="post">
-                        <div align="center"><button type="submit" >已有账号</button></div>
+                        <div align="center"><button type="submit" >登陆</button></div>
+                </form>
+
+		<br/>
+		<form id="m_form1" action="./autolog" method="post">
+ 			<div align="center"><button type="button" onclick="autoLog()">自动登陆</button></div>
+		<input id="token1" name="token" type="hidden" value="">
                 </form>
 		
 		

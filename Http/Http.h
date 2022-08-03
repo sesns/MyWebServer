@@ -1,12 +1,5 @@
 #ifndef HTTP_H_INCLUDED
 #define HTTP_H_INCLUDED
-#include "Buffer.h"
-#include "MySQL_connection_pool.h"
-#include "Locker.h"
-#include "Log.h"
-#include "Timer.h"
-#include "Threadpool.h"
-#include "UpLoadManager.h"
 #include<sys/stat.h>
 #include<sys/epoll.h>
 #include <sys/socket.h>
@@ -17,10 +10,24 @@
 #include<unistd.h>
 #include<unordered_map>
 #include <atomic>
+#include<sstream>
+#include "Buffer.h"
+#include "MySQL_connection_pool.h"
+#include "Locker.h"
+#include "Log.h"
+#include "Timer.h"
+#include "Threadpool.h"
+#include "UpLoadManager.h"
+#include "Token.h"
 
 const string m_doc_root="/home/moocos/CodeBlockWebServer/WebServer/html_files";
+const int cache_delay_time=20;//http缓存过期时间
 //定义http响应的一些状态信息
 const string ok_200_title = "OK";
+const string ok_206_title = "Partial Content";
+const string ok_304_title="Not Modified";
+const string error_416_title="Range Not Satisfiable";
+const string error_416_form="Your range request is out of range";
 const string error_400_title = "Bad Request";
 const string error_400_form = "Your request has bad syntax or is inherently impossible to staisfy.\n";
 const string error_403_title = "Forbidden";
@@ -57,7 +64,10 @@ public:
         FORBIDDEN_REQUEST,
         FILE_REQUEST,
         CLOSED_CONNECTION,
-        FILE_UPLOAD//上传文件
+        FILE_UPLOAD,//上传文件
+        FILE_PARTIAL_REQUEST,//范围文件请求
+        RANGE_NO_SATISFIABLE,//范围文件请求的range超出范围
+        FILE_NO_MODIFIED//用于缓存控制，表示可以使用缓存文件
     };
 private:
     int m_socket;//该http对象对应的连接socket
@@ -88,6 +98,24 @@ private:
     string m_boundary;
     string upload_status;//文件上传状态
 
+    //范围请求
+    bool if_range;
+    long long  range_left;
+    long long range_right;
+    string range_str;
+
+    //http缓存控制
+    bool if_request_has_Last_Modified;
+    string Modified_Since;
+    bool if_request_has_If_None_Match;
+    string If_None_Match_Etag;
+
+    //token,token放置在cookie
+    bool if_request_has_token;
+    bool log_succ;//登陆成功
+    Token m_token;
+    string m_user_id;
+
 private:
     LINE_STATUS parse_line();//从状态机解析缓冲区中的一行
     HTTP_CODE process_read();//主状态机解析http请求报文
@@ -99,10 +127,101 @@ private:
     void add_content_length(size_t len);//添加内容长度
     void add_content_type();//添加内容类型
     void add_connection();//添加连接状态
+
+    void add_content_disposition();//添加content_disposition字段用于弹出文件下载对话框
+
+    //范围请求
+    void add_Accept_Ranges();//添加Accept_Ranges字段
+    void add_Content_Range();//添加Content_Range字段
+
+    //缓存控制
+    void add_Date();//添加Date字段
+    void add_Cache_Control();//添加cache-control字段
+    void add_Expires();//添加Expires字段
+    void add_Last_Modified();//添加Last_Modified字段
+    void add_Etag();
+
+    //Token
+    void add_Access_Control_Expose_Headers();//允许客户端获取一些原本获取不到的首部
+    void add_Access_Control_Allow_Origin();
+    void add_Token();
+
+
     void add_black_line();//添加\r\n
     void add_headers(size_t len);//生成响应首部，将其写入用户写缓冲区中
     void add_content(string text);//添加内容
     bool process_write(HTTP_CODE ret);//生成响应报文，将其写入用户写缓冲区中
+
+    string get_etag()
+    {
+        std::stringstream sstream;
+        sstream << std::hex << m_file_stat.st_mtime;
+        std::string Last_Modified_Time_Hex_String = sstream.str();
+
+        std::stringstream sstream1;
+        sstream1 << std::hex << m_file_stat.st_size;
+        std::string Content_Length_Hex_String = sstream1.str();
+
+        string Etag="W/";
+        Etag+="\"";
+        Etag+=Last_Modified_Time_Hex_String;
+        Etag+="-";
+        Etag+=Content_Length_Hex_String;
+        Etag+="\"";
+
+        return Etag;
+    }
+    string get_timestamp(time_t raw_time)//获取http 格林尼治时间戳
+    {
+        //格林尼治时间戳格式  <day-name>, <day> <month> <year> <hour>:<minute>:<second> GMT
+        struct tm time_info;
+
+        gmtime_r(&raw_time,&time_info);
+
+        string Day_name[7]={"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
+        string Month[12]={"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
+        string Date="";
+
+        //day-name,一周中的第几天，范围从 0 到 6
+        Date+=Day_name[time_info.tm_wday];
+        Date+=", ";
+
+        //一月中的第几天，范围从 1 到 31
+        if(time_info.tm_mday<=9)
+            Date+="0";
+        Date+=to_string(time_info.tm_mday);
+        Date+=" ";
+
+        //月份，范围从 0 到 11
+        Date+=Month[time_info.tm_mon];
+        Date+=" ";
+
+        //自 1900 起的年数
+        Date+=to_string(time_info.tm_year+1900);
+        Date+=" ";
+
+        //小时，范围从 0 到 23
+        if(time_info.tm_hour<=9)
+            Date+="0";
+        Date+=to_string(time_info.tm_hour);
+        Date+=":";
+
+        //分，范围从 0 到 59
+        if(time_info.tm_min<=9)
+            Date+="0";
+        Date+=to_string(time_info.tm_min);
+        Date+=":";
+
+        //秒，范围从 0 到 59
+        if(time_info.tm_sec<=9)
+            Date+="0";
+        Date+=to_string(time_info.tm_sec);
+        Date+=" ";
+
+        Date+="GMT";
+
+        return Date;
+    }
     void set_noblocking(int fd)//将文件描述符设置为非阻塞
     {
         int old_option=fcntl(fd,F_GETFL);//获取文件状态标志

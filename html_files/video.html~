@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <title>视频页面</title>
+<script>
+		function loadVideo()
+		{
+			var xmlhttp;
+
+			if (window.XMLHttpRequest)
+			{
+				// IE7+, Firefox, Chrome, Opera, Safari 浏览器执行代码
+				xmlhttp=new XMLHttpRequest();
+			}
+			else
+			{
+				// IE6, IE5 浏览器执行代码
+				xmlhttp=new ActiveXObject("Microsoft.XMLHTTP");
+			}
+			xmlhttp.onreadystatechange=function()
+			{
+				if (xmlhttp.readyState==4 && xmlhttp.status==200)
+				{
+					var blob = new Blob([xmlhttp.response], { type: 'video/mp4' });
+                    				v.src = URL.createObjectURL(blob);
+				}
+			}
+			xmlhttp.open("POST","hiiro.mp4",true);
+			xmlhttp.responseType = 'blob'
+			var m_token = localStorage.getItem("xsy_token");
+			xmlhttp.send("token="+m_token);
+		}
+		
+		</script>
+    </head>
+    <body><br/>
+<br/>
+<div align="center"><font size="5"> <strong>这是一个视频</strong></font></div>
+<br/>
+
+<br/>
+<br/>
+<div align="center"><video id="v" style="width:500px;height:300px" onclick="loadVideo() controls></video><br /></div>
+</html>

@@ -4,6 +4,8 @@
 #include <assert.h>
 #include<string>
 #include <sys/uio.h>
+#include<iostream>
+#include<memory>
 using namespace std;
 class Buffer
 {
@@ -55,16 +57,17 @@ public:
     writeidx(kCheapPrepend),
     read_only_idx(kCheapPrepend),
     m_bytes_have_send(0),
-    m_bytes_to_send(0)
+    m_bytes_to_send(0),
+    len1(0),
+    len2(0),
+    start1(nullptr),
+    start2(nullptr),
+    m_iov_cnt(1)
     {
-        len1=0;
-        len2=0;
-        start1=nullptr;
-        start2=nullptr;
         assert(prepenableBytes()==8);
         assert(readableBytes()==0);
         assert(writableBytes()==initialSize);
-        m_iov_cnt=1;
+
         m_iov=nullptr;
         m_iov=(struct iovec*)malloc(m_iov_cnt*sizeof(struct iovec));
     }

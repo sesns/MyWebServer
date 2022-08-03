@@ -3,6 +3,31 @@
     <head>
         <meta charset="UTF-8">
         <title>WebServer</title>
+
+<script>
+function getToken1(){
+	var m_token=localStorage.getItem("xsy_token");
+	document.getElementById('token1').value = m_token;
+	
+	var form = document.getElementById("m_form1");
+	form.submit();
+}
+function getToken2(){
+	var m_token=localStorage.getItem("xsy_token");
+	document.getElementById('token2').value = m_token;
+	
+	var form = document.getElementById("m_form2");
+	form.submit();
+}
+function getToken3(){
+	var m_token=localStorage.getItem("xsy_token");
+	document.getElementById('token3').value = m_token;
+	
+	var form = document.getElementById("m_form3");
+	form.submit();
+}
+</script>
+
     </head>
     <body>
     <br/>
@@ -10,19 +35,24 @@
     <div align="center"><font size="5"> <strong>做出选择</strong></font></div>
 	<br/>
 		<br/>
-		<form action="5" method="post">
- 			<div align="center"><button type="submit">xxx.jpg</button></div>
-                </form>
-		<br/>
-                <form action="6" method="post">
-                        <div align="center"><button type="submit" >xxx.mp4</button></div>
+		<form id="m_form1" action="./Elaina.jpg" method="post">
+ 			<div align="center"><button type="button" onclick="getToken1()">xxx.jpg</button></div>
+		<input id="token1" name="token" type="hidden" value="">
                 </form>
 
 		<br/>
-		<form action="UploadFile" method="post" enctype="multipart/form-data">
-   		<div align="center"><input type="file" name="myfile" /></div>
+                <form id="m_form2" action="./6" method="post">
+                        <div align="center"><button type="button" onclick="getToken2()">xxx.mp4</button></div>
+		<input id="token2" name="token" type="hidden" value="">
+                </form>
+
+		<br/>
+		<form id="m_form3" action="UploadFile" method="post" enctype="multipart/form-data">
+   		<input id="token3" name="token" type="hidden" value="">
+		<div align="center"><input type="file" name="myfile" /></div>
 		<br />
-   		<div align="center"><input type="submit" value="提交文件" /></div>
+   		<div align="center"><button type="button" onclick="getToken3()">提交文件</button></div>
+		
    		</form>
 		
         </div>

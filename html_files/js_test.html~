@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8">
+		<title></title>
+	</head>
+	<style>
+		*{
+			margin: 0;
+			padding: 0;
+		}
+		#box{
+			display: flex;
+			padding: 0 450px;
+		}
+		#box span{
+			flex: 1;
+			display: flex;
+			border: red solid 1px;
+			height: 100px;
+			background-color: #4AB0F5;
+			justify-content: center;
+			align-items: center;
+			font-size: 28px;
+		}
+		#button{
+			padding: 20px 450px;	
+		}
+		#button button{
+			width: 80px;
+			height: 50px;
+			background-color: rosybrown;
+			font-size: 20px;
+			border: #B8860B solid 1px;
+			border-radius: 8px;
+			margin-right: 20px;
+		}
+	</style>
+	<script type="text/javascript" src="js.js"></script>
+	<body>
+		<div id="box">
+			<span>0</span>
+			<span>1</span>
+			<span>2</span>
+			<span>3</span>
+		</div>
+		</br>
+		<div id="button">
+			<button onclick="beginNum()">开始</button>
+			<button onclick="endNum()">结束</button>
+		</div>
+	</body>
+</html>

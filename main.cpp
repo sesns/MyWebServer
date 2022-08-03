@@ -5,7 +5,8 @@
 #include <sys/timerfd.h>
 #include <sys/time.h>
 #include "Server.h"
-#include "LockFreeQueue/LockFreeQueue.h"
+#include "Token.h"
+#include "urlcode.h"
 using namespace std;
 
 int main()
@@ -31,9 +32,6 @@ int main()
 
     if(m_webserver)
         delete m_webserver;
-
-
-
 
     return 0;
 }

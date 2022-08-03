@@ -10,6 +10,7 @@
 #include "Log.h"
 using namespace std;
 
+
 bool BlockQueue::push(const string& task)//生产者
 {
         loc.lock();
@@ -179,6 +180,11 @@ bool Log::init(bool close_log,const char* dir,const char* filename,size_t max_qu
 
 
     }
+
+
+
+
+
 
 
 /*

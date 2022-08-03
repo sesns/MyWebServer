@@ -3,7 +3,6 @@
 #include <iostream>
 using namespace std;
 
-
 bool UploadManager::CreateFile(const char* data,size_t len,const string& file_name)
 {
 	string file_full_name=upload_file_root_path+file_name;
@@ -37,7 +36,7 @@ string UploadManager::UploadFile(const string& body,const string& boundary)
 		int content_type_pos;
 		int data_pos;
 
-		int cur_pos=0;
+		int cur_pos=body.find(boundary_,boundary_.size());
 		int nxt_pos=body.find(boundary_,cur_pos+boundary_.size());
 		bool ret;
 

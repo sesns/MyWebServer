@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<script>
+function loadXMLDoc()
+{
+	var xmlhttp;
+
+	if (window.XMLHttpRequest)
+	{
+		// IE7+, Firefox, Chrome, Opera, Safari 浏览器执行代码
+		xmlhttp=new XMLHttpRequest();
+	}
+	else
+	{
+		// IE6, IE5 浏览器执行代码
+		xmlhttp=new ActiveXObject("Microsoft.XMLHTTP");
+	}
+	xmlhttp.onreadystatechange=function()
+	{
+		if (xmlhttp.readyState==4 && xmlhttp.status==200)
+		{
+
+		}
+	}
+	xmlhttp.open("GET","./picture.html",true);
+	var m_token = localStorage.getItem("xsy_token");
+	if(m_token!=null)
+	{
+		xmlhttp.setRequestHeader("Authorization",m_token);
+	}
+	xmlhttp.send();
+}
+</script>
+</head>
+<body>
+
+<h2>AJAX</h2>
+<button type="button" onclick="loadXMLDoc()">获取图片</button>
+<div id="myDiv"></div>
+
+</body>
+</html>

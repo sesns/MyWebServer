@@ -130,10 +130,17 @@ bool Buffer::readFD(int sockfd)
 //ET模式
 int Buffer::writeFD(int sockfd)
 {
+        //cout<<m_iov_cnt<<"\n";
+        //cout<<*(char*)(m_iov[0].iov_base)<<"\n";
+        //cout<<m_iov[0].iov_len<<"\n";
+        //cout<<*(char*)(m_iov[1].iov_base)<<"\n";
+        //cout<<m_iov[1].iov_len<<"\n";
+
     int ret;
     while(true)
     {
         ret=writev(sockfd,m_iov,m_iov_cnt);
+
         if(ret>0)
             m_bytes_have_send+=ret;
         else if(ret<0)
